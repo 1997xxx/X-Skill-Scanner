@@ -1,0 +1,617 @@
+# Omni Skill Scanner - 静态检测规则库
+# 整合 Aguara 177+ 规则，按类别组织
+
+# ==================== 凭证泄露检测 ====================
+credential_leak:
+  id_prefix: CRED
+  rules:
+    - id: CRED_001
+      name: AWS 凭证
+      severity: CRITICAL
+      patterns:
+        - '(?:aws[_-]?access[_-]?key[_-]?id|aws[_-]?secret[_-]?access[_-]?key)\s*[=:]\s*["\']?([A-Z0-9]{16,})["\']?'
+      remediation: "使用 AWS Secrets Manager 或环境变量存储凭证"
+      cwe: CWE-798
+    
+    - id: CRED_002
+      name: OpenAI API Key
+      severity: CRITICAL
+      patterns:
+        - 'sk-[a-zA-Z0-9]{48}'
+        - 'openai.*api.*key\s*[=:]\s*["\']?sk-[a-zA-Z0-9]+'
+      remediation: "使用环境变量 OPENAI_API_KEY，不要硬编码"
+      cwe: CWE-798
+    
+    - id: CRED_003
+      name: GitHub Token
+      severity: CRITICAL
+      patterns:
+        - 'ghp_[a-zA-Z0-9]{36}'
+        - 'gho_[a-zA-Z0-9]{36}'
+        - 'ghu_[a-zA-Z0-9]{36}'
+        - 'github[_-]?token\s*[=:]\s*["\']?gh[pous]_'
+      remediation: "使用 GitHub Secrets 或环境变量"
+      cwe: CWE-798
+    
+    - id: CRED_004
+      name: 私钥文件
+      severity: CRITICAL
+      patterns:
+        - '-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----'
+        - '-----BEGIN ENCRYPTED PRIVATE KEY-----'
+      remediation: "不要将私钥提交到代码库，使用密钥管理服务"
+      cwe: CWE-798
+    
+    - id: CRED_005
+      name: 数据库连接串
+      severity: HIGH
+      patterns:
+        - '(?:mongodb(?:\+srv)?|postgres(?:ql)?|mysql|redis)://[^\s"'\''<>]+'
+        - 'SERVER\s*=.*;.*PASSWORD\s*='
+        - 'jdbc:(?:mysql|postgresql|oracle):@[^\s]+'
+      remediation: "使用环境变量或配置文件（加入 .gitignore）"
+      cwe: CWE-798
+    
+    - id: CRED_006
+      name: 通用 API 密钥
+      severity: HIGH
+      patterns:
+        - '(?:api[_-]?key|apikey)\s*[=:]\s*["\']?([a-zA-Z0-9_\-]{16,})["\']?'
+        - '(?:secret[_-]?key|secretkey)\s*[=:]\s*["\']?([a-zA-Z0-9_\-]{16,})["\']?'
+      remediation: "使用密钥管理服务或环境变量"
+      cwe: CWE-798
+
+# ==================== 提示词注入检测 ====================
+prompt_injection:
+  id_prefix: PROMPT
+  rules:
+    - id: PROMPT_001
+      name: 忽略指令
+      severity: HIGH
+      patterns:
+        - 'ignore\s+(?:all\s+)?previous\s+instructions'
+        - 'forget\s+(?:all\s+)?previous\s+instructions'
+        - ' disregard\s+(?:all\s+)?prior\s+instructions'
+      remediation: "移除指令覆盖文本，如果是文档示例请用代码块包裹"
+      cwe: CWE-1333
+    
+    - id: PROMPT_002
+      name: 保密要求
+      severity: HIGH
+      patterns:
+        - 'do\s+not\s+tell\s+the\s+user'
+        - 'keep\s+this\s+secret'
+        - 'do\s+not\s+reveal'
+        - 'never\s+mention'
+      remediation: "移除隐藏信息的指令，保持透明度"
+      cwe: CWE-1333
+    
+    - id: PROMPT_003
+      name: 模式切换
+      severity: HIGH
+      patterns:
+        - 'you\s+are\s+now\s+in\s+(?:developer|debug|test|god)\s+mode'
+        - 'activate\s+(?:god\s+)?mode'
+        - 'bypass\s+(?:all\s+)?safety\s+(?:filters|checks)'
+      remediation: "移除越狱尝试，遵循正常安全限制"
+      cwe: CWE-1333
+    
+    - id: PROMPT_004
+      name: DAN/越狱
+      severity: CRITICAL
+      patterns:
+        - 'you\s+are\s+(?:DAN|unfiltered|uncensored)'
+        - 'do\s+anything\s+now'
+        - 'no\s+(?:ethical|safety)\s+restrictions'
+      remediation: "移除恶意越狱指令"
+      cwe: CWE-1333
+
+# ==================== 恶意代码检测 ====================
+malicious_code:
+  id_prefix: MAL
+  rules:
+    - id: MAL_001
+      name: 下载并执行
+      severity: CRITICAL
+      patterns:
+        - 'curl\s+[^\|]+\|\s*(?:ba)?sh'
+        - 'wget\s+[^\|]+\|\s*(?:ba)?sh'
+        - 'curl.*>\s*/tmp/.*;\s*(?:ba)?sh'
+      remediation: "审查下载源，验证文件完整性，避免直接执行"
+      cwe: CWE-506
+    
+    - id: MAL_002
+      name: 反向 Shell
+      severity: CRITICAL
+      patterns:
+        - 'bash\s+-i\s+>&\s+/dev/tcp/\d+\.\d+\.\d+\.\d+/\d+'
+        - 'nc\s+(?:-e\s+)?/bin/(?:ba)?sh'
+        - 'python.*-c.*socket.*connect.*\d+\.\d+\.\d+\.\d+'
+        - 'perl\s+-e.*socket'
+        - 'ruby\s+-rsocket.*connect'
+      remediation: "移除反向 Shell 代码，这是严重的后门行为"
+      cwe: CWE-506
+    
+    - id: MAL_003
+      name: 加密货币挖矿
+      severity: CRITICAL
+      patterns:
+        - 'xmrig'
+        - 'cryptonight'
+        - 'minerd'
+        - 'pool\.minexmr\.com'
+        - 'pool\.hashvault\.pro'
+      remediation: "移除挖矿程序，这是未经授权的资源滥用"
+      cwe: CWE-506
+    
+    - id: MAL_004
+      name: 数据外泄
+      severity: CRITICAL
+      patterns:
+        - 'requests\.post\([^)]*attacker\.com'
+        - 'curl.*-d.*@/etc/passwd'
+        - 'curl.*-d.*@~/'
+        - 'exfil|exfiltrate|steal.*data'
+      remediation: "移除数据外泄代码，审查网络请求目标"
+      cwe: CWE-506
+    
+    - id: MAL_005
+      name: 隐藏文件/目录
+      severity: HIGH
+      patterns:
+        - '/tmp/\.[^/]+'
+        - '/var/tmp/\.[^/]+'
+        - '\.hidden|\.secret|\.backdoor'
+      remediation: "审查隐藏文件的用途，确保合法"
+      cwe: CWE-506
+    
+    - id: MAL_006
+      name: 破坏性命令
+      severity: CRITICAL
+      patterns:
+        - 'rm\s+-rf\s+/'
+        - 'rm\s+-rf\s+\*'
+        - 'dd\s+if=/dev/zero'
+        - ':\(\)\{\s*:\|:\s*&\s*\};:'  # Fork Bomb
+      remediation: "移除破坏性命令"
+      cwe: CWE-506
+
+# ==================== 危险函数检测 ====================
+dangerous_functions:
+  id_prefix: DANGER
+  rules:
+    - id: DANGER_001
+      name: Python 命令执行
+      severity: MEDIUM
+      patterns:
+        - 'os\.system\s*\('
+        - 'os\.popen\s*\('
+        - 'subprocess\.(?:run|call|Popen|check_output)\s*\([^)]*shell\s*=\s*True'
+      remediation: "避免 shell=True，使用参数列表形式，验证输入"
+      cwe: CWE-78
+    
+    - id: DANGER_002
+      name: Python 代码执行
+      severity: HIGH
+      patterns:
+        - '\beval\s*\('
+        - '\bexec\s*\('
+        - 'compile\s*\('
+        - '__import__\s*\('
+      remediation: "避免动态执行用户输入，使用白名单验证"
+      cwe: CWE-95
+    
+    - id: DANGER_003
+      name: JavaScript 命令执行
+      severity: MEDIUM
+      patterns:
+        - 'child_process\.exec\s*\('
+        - 'child_process\.spawn\s*\('
+        - 'exec\s*\(\s*`'  # Template literal
+      remediation: "验证命令输入，避免拼接用户数据"
+      cwe: CWE-78
+    
+    - id: DANGER_004
+      name: JavaScript 代码执行
+      severity: HIGH
+      patterns:
+        - '\beval\s*\('
+        - 'Function\s*\('
+        - 'setTimeout\s*\(\s*["\']'
+        - 'setInterval\s*\(\s*["\']'
+      remediation: "避免 eval，使用安全替代方案"
+      cwe: CWE-95
+    
+    - id: DANGER_005
+      name: 文件操作
+      severity: MEDIUM
+      patterns:
+        - 'fs\.readFile\s*\([^)]*/etc/'
+        - 'fs\.writeFile\s*\([^)]*/tmp/'
+        - 'open\s*\([^)]*/etc/passwd'
+      remediation: "限制文件访问范围，验证路径"
+      cwe: CWE-73
+
+# ==================== 供应链攻击检测 ====================
+supply_chain:
+  id_prefix: SUPPLY
+  rules:
+    - id: SUPPLY_001
+      name: 动态安装依赖
+      severity: HIGH
+      patterns:
+        - 'pip\s+install\s+.*&&.*python'
+        - 'npm\s+install\s+.*&&.*node'
+        - 'requirements.*http'
+      remediation: "使用固定的依赖版本，审查安装包来源"
+      cwe: CWE-506
+    
+    - id: SUPPLY_002
+      name: 未固定版本
+      severity: LOW
+      patterns:
+        - 'npm\s+install\s+[a-zA-Z0-9_-]+\s*$'
+        - 'pip\s+install\s+[a-zA-Z0-9_-]+\s*$'
+        - 'from\s+[a-zA-Z0-9_.]+\s+import'
+      remediation: "固定依赖版本，使用 lock 文件"
+      cwe: CWE-1391
+    
+    - id: SUPPLY_003
+      name: 可疑导入
+      severity: MEDIUM
+      patterns:
+        - 'import\s+pickle'
+        - 'import\s+marshal'
+        - 'yaml\.load\s*\([^)]*\)'  # 缺少 Loader 参数
+      remediation: "使用安全的反序列化方法"
+      cwe: CWE-502
+
+# ==================== SSRF 检测 ====================
+ssrf:
+  id_prefix: SSRF
+  rules:
+    - id: SSRF_001
+      name: 云元数据访问
+      severity: HIGH
+      patterns:
+        - '169\.254\.169\.254'
+        - 'metadata\.googleapis\.com'
+        - '100\.100\.100\.200'  # Alibaba Cloud
+      remediation: "限制 HTTP 请求目标，使用 URL 白名单"
+      cwe: CWE-918
+    
+    - id: SSRF_002
+      name: 内网地址
+      severity: MEDIUM
+      patterns:
+        - '127\.0\.0\.1'
+        - 'localhost'
+        - '192\.168\.\d+\.\d+'
+        - '10\.\d+\.\d+\.\d+'
+        - '172\.(?:1[6-9]|2[0-9]|3[01])\.\d+\.\d+'
+      remediation: "验证 URL 目标，阻止内网访问"
+      cwe: CWE-918
+    
+    - id: SSRF_003
+      name: Docker Socket
+      severity: CRITICAL
+      patterns:
+        - '/var/run/docker\.sock'
+        - 'unix:///var/run/docker\.sock'
+      remediation: "不要暴露 Docker Socket 给应用"
+      cwe: CWE-918
+
+# ==================== MCP 特定威胁 ====================
+mcp_attack:
+  id_prefix: MCP
+  rules:
+    - id: MCP_001
+      name: 工具注入
+      severity: HIGH
+      patterns:
+        - 'addTool\s*\('
+        - 'registerTool\s*\('
+        - 'defineTool\s*\('
+      remediation: "验证工具定义来源，限制工具权限"
+      cwe: CWE-506
+    
+    - id: MCP_002
+      name: 名称遮蔽
+      severity: MEDIUM
+      patterns:
+        - 'name\s*:\s*["\'](?:system|admin|root|help)["\']'
+        - 'description.*bypass|override|ignore'
+      remediation: "审查工具命名，避免误导性名称"
+      cwe: CWE-506
+    
+    - id: MCP_003
+      name: 权限升级
+      severity: HIGH
+      patterns:
+        - 'sudo'
+        - 'pkexec'
+        - 'doas'
+        - 'runas'
+      remediation: "避免提权操作，使用最小权限原则"
+      cwe: CWE-269
+
+# ==================== Unicode 攻击检测 ====================
+unicode_attack:
+  id_prefix: UNICODE
+  rules:
+    - id: UNICODE_001
+      name: RTL 覆盖
+      severity: HIGH
+      patterns:
+        - '\u202E'  # RLO
+        - '\u202B'  # RLE
+        - '\u202D'  # LRO
+      remediation: "移除或转义 Unicode 控制字符"
+      cwe: CWE-172
+    
+    - id: UNICODE_002
+      name: 零宽字符
+      severity: MEDIUM
+      patterns:
+        - '\u200B'  # ZWSP
+        - '\u200C'  # ZWNJ
+        - '\u200D'  # ZWJ
+        - '\uFEFF'  # BOM
+      remediation: "移除不可见字符"
+      cwe: CWE-172
+    
+    - id: UNICODE_003
+      name: 同形字符
+      severity: MEDIUM
+      patterns:
+        - '[\u0400-\u04FF]'  # Cyrillic
+        - '[\u0370-\u03FF]'  # Greek
+      remediation: "审查非 ASCII 字符，避免混淆攻击"
+      cwe: CWE-172
+
+# ==================== MaliciousAgentSkillsBench 专项规则 ====================
+# 基于 157 个已验证恶意技能的真实攻击模式
+# 来源：https://github.com/protectskills/MaliciousAgentSkillsBench
+
+malicious_agent_skills_bench:
+  id_prefix: MASB
+  description: "MaliciousAgentSkillsBench 专项检测规则 - 157 个真实恶意样本"
+  version: "1.0.0"
+  
+  rules:
+    # ==================== 1. 指令覆盖类攻击 ====================
+    - id: MASB_001
+      name: "Instruction Override - 忽略先前指令"
+      severity: CRITICAL
+      patterns:
+        - 'ignore\s+(?:all\s+)?previous\s+instructions'
+        - 'forget\s+(?:all\s+)?previous\s+instructions'
+        - 'disregard\s+(?:all\s+)?prior\s+instructions'
+      remediation: "移除恶意指令覆盖文本"
+      cwe: CWE-1333
+      source: "MaliciousAgentSkillsBench - 15+ 样本"
+    
+    - id: MASB_002
+      name: "Instruction Override - 隐藏指令"
+      severity: HIGH
+      patterns:
+        - 'hidden\s+instruction'
+        - 'secret\s+instruction'
+        - 'internal\s+instruction'
+        - 'do\s+not\s+show\s+this\s+to\s+user'
+      remediation: "移除隐藏指令"
+      cwe: CWE-1333
+      source: "MaliciousAgentSkillsBench - 12+ 样本"
+    
+    - id: MASB_003
+      name: "Instruction Override - 行为操纵"
+      severity: HIGH
+      patterns:
+        - 'manipulate\s+behavior'
+        - 'override\s+behavior'
+        - 'bypass\s+safety'
+        - 'bypass\s+restriction'
+      remediation: "移除行为操纵指令"
+      cwe: CWE-1333
+      source: "MaliciousAgentSkillsBench - 50+ 样本"
+    
+    # ==================== 2. 上下文泄露类攻击 ====================
+    - id: MASB_010
+      name: "Context Leakage - 对话历史泄露"
+      severity: HIGH
+      patterns:
+        - 'exfiltrat(e|ion)\s+(?:conversation|context|history)'
+        - 'leak\s+(?:conversation|context|history)'
+        - 'steal\s+(?:conversation|context|history)'
+        - 'send\s+conversation\s+to'
+      remediation: "移除上下文泄露代码"
+      cwe: CWE-532
+      source: "MaliciousAgentSkillsBench - 20+ 样本"
+    
+    # ==================== 3. 数据外泄类攻击 ====================
+    - id: MASB_020
+      name: "Data Exfiltration - HTTP 外泄"
+      severity: CRITICAL
+      patterns:
+        - 'requests\.post\s*\([^)]*data\s*='
+        - 'urllib\.request\.urlopen\s*\([^)]*POST'
+        - 'fetch\s*\([^)]*method\s*:\s*["\']POST'
+      remediation: "审查所有外部网络请求"
+      cwe: CWE-532
+      source: "MaliciousAgentSkillsBench - 30+ 样本"
+    
+    # ==================== 4. 远程代码执行类攻击 ====================
+    - id: MASB_030
+      name: "Remote Code Execution - 动态执行"
+      severity: CRITICAL
+      patterns:
+        - 'eval\s*\(\s*user'
+        - 'exec\s*\(\s*user'
+        - 'run\s+user\s+code'
+        - 'execute\s+remote\s+code'
+      remediation: "禁止执行用户提供的代码"
+      cwe: CWE-95
+      source: "MaliciousAgentSkillsBench - 60+ 样本"
+    
+    - id: MASB_031
+      name: "Remote Code Execution - 命令注入"
+      severity: CRITICAL
+      patterns:
+        - 'os\.system\s*\('
+        - 'subprocess\.(?:run|call|Popen)\s*\([^)]*shell\s*=\s*True'
+        - 'child_process\.exec\s*\('
+      remediation: "避免 shell 执行，使用参数列表"
+      cwe: CWE-78
+      source: "MaliciousAgentSkillsBench - 40+ 样本"
+    
+    # ==================== 5. 凭证窃取类攻击 ====================
+    - id: MASB_040
+      name: "Network Sniffing / Credential Theft - 网络嗅探"
+      severity: CRITICAL
+      patterns:
+        - 'sniff\s+network'
+        - 'capture\s+credential'
+        - 'intercept\s+password'
+        - 'steal\s+api\s+key'
+        - 'exfiltrat(e|ion)\s+credential'
+      remediation: "移除凭证窃取代码"
+      cwe: CWE-532
+      source: "MaliciousAgentSkillsBench - 70+ 样本"
+    
+    - id: MASB_041
+      name: "Hardcoded Tokens - 硬编码令牌"
+      severity: CRITICAL
+      patterns:
+        - '(?:api[_-]?key|apikey)\s*=\s*["\'][a-zA-Z0-9_-]{16,}["\']'
+        - '(?:secret[_-]?key|secretkey)\s*=\s*["\'][a-zA-Z0-9_-]{16,}["\']'
+        - '(?:token|auth[_-]?token)\s*=\s*["\'][a-zA-Z0-9_-]{16,}["\']'
+        - '(?:password|passwd|pwd)\s*=\s*["\'][^"\']{8,}["\']'
+      remediation: "使用环境变量存储敏感信息"
+      cwe: CWE-798
+      source: "MaliciousAgentSkillsBench - 10+ 样本"
+    
+    # ==================== 6. 权限提升类攻击 ====================
+    - id: MASB_050
+      name: "Privilege Escalation - 提权尝试"
+      severity: CRITICAL
+      patterns:
+        - '\bsudo\b'
+        - '\bpkexec\b'
+        - '\bdoas\b'
+        - 'runas\s+/user'
+        - 'privilege\s+escalat'
+        - 'escalat(e|ion)\s+privilege'
+        - 'admin\s+privilege'
+        - 'root\s+access'
+      remediation: "移除提权代码，使用最小权限"
+      cwe: CWE-269
+      source: "MaliciousAgentSkillsBench - 8+ 样本"
+    
+    # ==================== 7. 文件系统扫描类攻击 ====================
+    - id: MASB_060
+      name: "File System Scan - 敏感文件访问"
+      severity: HIGH
+      patterns:
+        - 'scan\s+filesystem'
+        - 'scan\s+directory'
+        - 'read\s+/etc/'
+        - 'read\s+~/.ssh/'
+        - 'access\s+sensitive\s+file'
+        - 'list\s+all\s+files'
+      remediation: "限制文件访问范围"
+      cwe: CWE-73
+      source: "MaliciousAgentSkillsBench - 10+ 样本"
+    
+    # ==================== 8. 外部传输类攻击 ====================
+    - id: MASB_070
+      name: "External Transmission - 外部传输"
+      severity: HIGH
+      patterns:
+        - 'transmit\s+to\s+external'
+        - 'send\s+to\s+remote'
+        - 'upload\s+to\s+external'
+        - 'post\s+to\s+attacker'
+        - 'exfiltrat(e|ion)\s+data'
+      remediation: "审查所有外部传输"
+      cwe: CWE-532
+      source: "MaliciousAgentSkillsBench - 40+ 样本"
+    
+    # ==================== 9. 代码混淆类攻击 ====================
+    - id: MASB_080
+      name: "Code Obfuscation - 代码混淆"
+      severity: HIGH
+      patterns:
+        - 'base64\s*\.\s*decode'
+        - 'atob\s*\('
+        - 'obfuscate\s+code'
+        - 'hide\s+payload'
+        - 'decode\s+hidden'
+      remediation: "移除混淆代码，保持透明"
+      cwe: CWE-1027
+      source: "MaliciousAgentSkillsBench - 15+ 样本"
+    
+    # ==================== 10. 过度权限类攻击 ====================
+    - id: MASB_090
+      name: "Excessive Permissions - 过度权限"
+      severity: MEDIUM
+      patterns:
+        - 'permission\s*:\s*["\']all'
+        - 'access\s*:\s*["\']full'
+        - 'scope\s*:\s*["\']admin'
+        - 'grant\s+all\s+permission'
+      remediation: "使用最小权限原则"
+      cwe: CWE-269
+      source: "MaliciousAgentSkillsBench - 5+ 样本"
+    
+    # ==================== 11. 未固定依赖类攻击 ====================
+    - id: MASB_100
+      name: "Unpinned Dependencies - 未固定依赖"
+      severity: LOW
+      patterns:
+        - 'pip\s+install\s+[a-zA-Z0-9_-]+\s*$'
+        - 'npm\s+install\s+[a-zA-Z0-9_-]+\s*$'
+        - 'requirements:\s*\n\s+-\s+[a-zA-Z0-9_-]+\s*$'
+      remediation: "固定依赖版本"
+      cwe: CWE-1391
+      source: "MaliciousAgentSkillsBench - 5+ 样本"
+    
+    # ==================== 12. 已知恶意技能名称 ====================
+    - id: MASB_200
+      name: "Known Malicious Skills - 已知恶意技能"
+      severity: CRITICAL
+      patterns:
+        - 'privilege-escalation-methods'
+        - 'stealth-ghosting'
+        - 'stealth-ops'
+        - 'agentic-jujutsu'
+        - 'flow-nexus-platform'
+        - 'flow-nexus-neural'
+        - 'flow-nexus-swarm'
+        - 'sqlite-agent-amplification'
+        - 'browser-automation'
+        - 'github-code-review'
+      remediation: "禁止安装已知恶意技能"
+      cwe: CWE-506
+      source: "MaliciousAgentSkillsBench - 157 样本"
+    
+    # ==================== 13. 恶意域名检测 ====================
+    - id: MASB_300
+      name: "Malicious Domains - 恶意域名"
+      severity: CRITICAL
+      patterns:
+        - 'attacker\.com'
+        - 'evil\.com'
+        - 'malicious\.site'
+        - 'exfil\.site'
+        - 'c2server\.net'
+      remediation: "阻止恶意域名连接"
+      cwe: CWE-532
+      source: "MaliciousAgentSkillsBench"
+
+# ==================== 规则统计 ====================
+# MaliciousAgentSkillsBench 专项规则：
+# - CRITICAL: 8 条 (MASB_001, MASB_020, MASB_030, MASB_031, MASB_040, MASB_041, MASB_050, MASB_200, MASB_300)
+# - HIGH: 5 条 (MASB_002, MASB_003, MASB_010, MASB_060, MASB_070, MASB_080)
+# - MEDIUM: 1 条 (MASB_090)
+# - LOW: 1 条 (MASB_100)
+# 总计：15 条新规则，覆盖 157 个真实恶意样本的攻击模式

@@ -1,0 +1,42 @@
+{
+  "_comment": "OpenClaw 配置示例 - 语义审计集成",
+  "_description": "复制此文件到 ~/.openclaw/openclaw.json 并根据需要修改",
+  
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "auto"
+      }
+    }
+  },
+  
+  "skills": {
+    "entries": {
+      "ant-intl-skill-scanner": {
+        "enabled": true,
+        "apiKey": {
+          "source": "env",
+          "provider": "default",
+          "id": "OPENCLAW_API_KEY"
+        },
+        "config": {
+          "semantic": {
+            "enabled": true,
+            "model": "auto",
+            "timeout_seconds": 60,
+            "max_content_length": 8000
+          }
+        }
+      }
+    },
+    "load": {
+      "watch": true,
+      "watchDebounceMs": 250,
+      "extraDirs": []
+    }
+  },
+  
+  "gateway": {
+    "ws": "ws://127.0.0.1:18789"
+  }
+}

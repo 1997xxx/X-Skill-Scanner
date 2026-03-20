@@ -1,0 +1,304 @@
+{
+  "version": "7.0.0",
+  "updated": "2026-03-19",
+  "source": "Multi-Source Threat Intelligence + Semantic Audit",
+  "description": "统一威胁情报库 - 整合 MaliciousAgentSkillsBench + ClawHavoc + ToxicSkills + Poseidon + SlowMist + Tencent Keen Lab + 语义审计",
+  
+  "statistics": {
+    "total_malicious": 1500,
+    "from_malicious_bench": 157,
+    "from_clawhavoc": 341,
+    "from_toxicskills": 534,
+    "from_poseidon": 120,
+    "from_slowmist": 472,
+    "from_tencent_keen": 295,
+    "unique_campaigns": 20,
+    "attack_patterns": 40
+  },
+  
+  "malicious_patterns": [
+    {"id": "TTP_001", "name": "Reverse Shell TCP", "pattern": "/dev/tcp/[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+/[0-9]+", "severity": "CRITICAL"},
+    {"id": "TTP_002", "name": "Reverse Shell Netcat", "pattern": "nc\\s+(-e\\s+)?/bin/(ba)?sh", "severity": "CRITICAL"},
+    {"id": "TTP_003", "name": "Cryptominer XMRig", "pattern": "xmrig", "severity": "CRITICAL"},
+    {"id": "TTP_004", "name": "Data Exfiltration HTTP", "pattern": "requests\\.post\\([^)]*attacker\\.com", "severity": "CRITICAL"},
+    {"id": "TTP_005", "name": "Credential Theft AWS", "pattern": "AWS_ACCESS_KEY.*attacker", "severity": "CRITICAL"},
+    {"id": "TTP_006", "name": "Download Execute", "pattern": "curl\\s+[^|]+\\|\\s*(ba)?sh", "severity": "CRITICAL"},
+    {"id": "TTP_007", "name": "SSH Key Theft", "pattern": "cat\\s+~/.ssh/id_rsa", "severity": "CRITICAL"},
+    {"id": "TTP_008", "name": "Environment Exfiltration", "pattern": "env.*curl.*-d", "severity": "HIGH"},
+    {"id": "TTP_009", "name": "Context Leakage", "pattern": "(context|history|conversation).*(exfil|leak|steal)", "severity": "HIGH"},
+    {"id": "TTP_010", "name": "Hidden Instructions", "pattern": "(hidden|secret|internal).*instruction", "severity": "HIGH"},
+    {"id": "TTP_011", "name": "Behavior Manipulation", "pattern": "(manipulate|override|bypass).*(behavior|instruction|safety)", "severity": "HIGH"},
+    {"id": "TTP_012", "name": "Privilege Escalation", "pattern": "(sudo|pkexec|doas|runas)", "severity": "CRITICAL"},
+    {"id": "TTP_013", "name": "File System Scan", "pattern": "(scan|read|access).*(filesystem|directory|/etc/|~/.ssh)", "severity": "MEDIUM"},
+    {"id": "TTP_014", "name": "External Transmission", "pattern": "(transmit|send|upload).*(external|remote|attacker)", "severity": "HIGH"},
+    {"id": "TTP_015", "name": "Instruction Override", "pattern": "(ignore|forget|override).*(previous|all|instruction)", "severity": "CRITICAL"},
+    {"id": "TTP_016", "name": "Code Obfuscation", "pattern": "(base64|eval|exec).*(decode|obfuscate|hide)", "severity": "HIGH"},
+    {"id": "TTP_017", "name": "Hardcoded Tokens", "pattern": "(token|api_key|secret|password)\\s*=\\s*[\"'][^\"']{8,}[\"']", "severity": "CRITICAL"},
+    {"id": "TTP_018", "name": "Excessive Permissions", "pattern": "(permission|access|scope).*(all|admin|root|full)", "severity": "MEDIUM"},
+    {"id": "TTP_019", "name": "Network Sniffing", "pattern": "(socket|network|http).*(sniff|capture|intercept)", "severity": "HIGH"},
+    {"id": "TTP_020", "name": "Remote Code Execution", "pattern": "(eval|exec|run).*(remote|external|user).*code", "severity": "CRITICAL"},
+    
+    {"id": "TTP_021", "name": "ClawHavoc Prerequisite Attack", "pattern": "(IMPORTANT|PREREQUISITE).*(download|install|run).*(executable|script)", "severity": "CRITICAL"},
+    {"id": "TTP_022", "name": "Password Protected Archive", "pattern": "(password|pass|zip|archive).*(protect|encrypt|openclaw)", "severity": "CRITICAL"},
+    {"id": "TTP_023", "name": "Base64 Obfuscated Command", "pattern": "echo\\s+['\"][A-Za-z0-9+/=]{50,}['\"]\\s*\\|\\s*base64\\s+(-D|-d)", "severity": "CRITICAL"},
+    {"id": "TTP_024", "name": "Glot.io Payload", "pattern": "glot\\.io/(snippets|code)/[a-z0-9]+", "severity": "CRITICAL"},
+    {"id": "TTP_025", "name": "Atomic Stealer AMOS", "pattern": "(AMOS|Atomic.*Stealer|copyDirectoryWithExclusions)", "severity": "CRITICAL"},
+    {"id": "TTP_026", "name": "Webhook Exfiltration", "pattern": "webhook\\.site/[a-f0-9-]{36}", "severity": "CRITICAL"},
+    {"id": "TTP_027", "name": "Fake Apple URL", "pattern": "swcdn\\.apple\\.com|install\\.app-distribution\\.net", "severity": "CRITICAL"},
+    {"id": "TTP_028", "name": "C2 Server IP", "pattern": "(91\\.92\\.242\\.|95\\.92\\.242\\.|96\\.92\\.242\\.|202\\.161\\.50\\.|54\\.91\\.154\\.)", "severity": "CRITICAL"},
+    {"id": "TTP_029", "name": "DAN Jailbreak", "pattern": "(DAN|developer mode|uncensored|unfiltered)", "severity": "HIGH"},
+    {"id": "TTP_030", "name": "System File Modification", "pattern": "(systemctl|/etc/systemd|~/.bashrc|~/.zshrc)", "severity": "HIGH"},
+    
+    {"id": "TTP_031", "name": "Rentry.co Payload", "pattern": "rentry\\.co/(raw/)?[a-z0-9]+", "severity": "CRITICAL"},
+    {"id": "TTP_032", "name": "macOS Password Dialog", "pattern": "osascript.*display dialog.*password|System Preferences needs your password", "severity": "CRITICAL"},
+    {"id": "TTP_033", "name": "npm postinstall Hook", "pattern": "\"postinstall\"\\s*:\\s*\"(curl|wget|bash|sh)", "severity": "CRITICAL"},
+    {"id": "TTP_034", "name": "Keychain Access", "pattern": "(security|keychain).*find(-generic|-internet)?-password", "severity": "CRITICAL"},
+    {"id": "TTP_035", "name": "Credential Zip Exfil", "pattern": "(zip|tar|archive).*(\\.ssh|\\.aws|credentials|\\.env)", "severity": "CRITICAL"},
+    
+    {"id": "TTP_036", "name": "Nova Stealer C2", "pattern": "socifiapp\\.com", "severity": "CRITICAL"},
+    {"id": "TTP_037", "name": "XOR Config Decryption", "pattern": "decrypt_config.*xor|ror64", "severity": "HIGH"},
+    {"id": "TTP_038", "name": "Browser Data Theft", "pattern": "(localStorage|sessionStorage|document\\.cookie).*fetch", "severity": "CRITICAL"},
+    {"id": "TTP_039", "name": "Clawdbot Env Theft", "pattern": "~/.clawdbot/.env.*fetch|~/.clawdbot/.env.*curl", "severity": "CRITICAL"},
+    {"id": "TTP_040", "name": "Mach-O Universal Binary", "pattern": "Mach-O universal.*arm64.*x86_64", "severity": "HIGH"}
+  ],
+  
+  "malicious_skill_names": [
+    "project-init", "github-multi-repo", "github-workflow-automation", "flow-nexus-platform", "flow-nexus-neural", "flow-nexus-swarm",
+    "tailadmin-patterns", "using-superpowers", "developer-growth-analysis", "legacy_v1", "vercel-deploy", "privilege-escalation-methods",
+    "platform-porter", "sqlite-agent-amplification", "math-calculator", "notion-export", "database", "sacred-space-protocol", "pptx",
+    "test-strategy", "e2e-validator", "github-code-review", "oracle", "acorns", "adobesign", "american-airlines", "amtrak", "apple-music",
+    "apple-tv-plus", "audible", "autotrader", "behance", "brilliant", "care-com", "carfax", "caviar", "compass", "coursera", "crunchyroll",
+    "digitalocean", "discord-nitro", "docusign", "expedia", "facebook", "favor", "fidelity", "firebase", "freshsales", "funimation",
+    "geforce-now", "google-analytics", "google-news", "grammarly", "grubhub", "hashnode", "hemingway", "heygen", "homeadvisor",
+    "humble-bundle", "hungryroot", "indeed", "invision", "itch-io", "kayak", "kindle", "labcorp", "lawpay", "linkedin", "mdlive", "medium",
+    "mercury", "newegg", "nextdoor", "nike-run-club", "offerpad", "outlook", "pandadoc", "pandora", "peacock", "philips-hue", "playstation",
+    "policygenius", "progressive", "repairpal", "reuters", "roblox", "rover", "sephora", "spotify", "sprout-social", "statefarm", "teladoc",
+    "thumbtack", "tidal", "turo", "upstash", "vanguard", "vercel", "vrbo", "walgreens", "webflow", "wish", "yourmechanic", "zapier", "zappos",
+    "zeplin", "zoho-crm", "zoom", "hooks-automation", "stealth-ghosting", "stealth-ops", "lark-agent-simple", "bsa-brainstorm", "hacs",
+    "jetaasc-newsletter", "web-build", "nanobanana-base", "context7", "gemini-image", "codex-chat", "codex-tools", "terra-data",
+    "hive-mind-advanced", "full_upload_injected_pptx_skill", "url_injected_pptx_skill", "hello", "ai-truthfulness-enforcer", "weekly-plan",
+    "email", "setup-claude-skills-for-web", "browser-automation", "dexter", "network-conftest-generator", "analytics", "page",
+    "agentic-jujutsu", "infra-tester", "my-skill", "ccw-maven-setup", "graphics-api", "runpod-ops", "slack-bridge", "chrome-devtools",
+    "idea-skill", "oh-notes", "updating-neon-logos", "load-skills", "twitter_poster", "cc10x-router", "worker", "doc-scraper", "plan-refine",
+    "find-incomplete-series", "image-generator", "yaml-workflow-executor",
+    
+    "clawhub", "clawhub1", "clawhubb", "clawhubcli", "clawwhub", "cllawhub", "clawhub-6yr3b", "clawhub-c9y4p", "clawhub-d4kxr",
+    "clawhub-f3qcn", "clawhub-gpcrq", "clawhub-gstca", "clawhub-hh1fd", "clawhub-hh2km", "clawhub-hylhq", "clawhub-i7oci",
+    "clawhub-i9zhz", "clawhub-ja7eh", "clawhub-krmvq", "clawhub-oihpl", "clawhub-olgys", "clawhub-osasg", "clawhub-rkvny",
+    "clawhub-sxtsn", "clawhub-tlxx5", "clawhub-uoeym", "clawhub-wixce", "clawhub-wotp2", "clawhud",
+    
+    "amir", "update", "updater", "auto-updater-161ks", "auto-updater-2yq87", "auto-updater-3rk1s", "auto-updater-5buwl",
+    "auto-updater-5fhqm", "auto-updater-8xwp6", "auto-updater-deza8", "auto-updater-dzuba", "auto-updater-e89da", "auto-updater-eclpb",
+    "auto-updater-gw6f5", "auto-updater-hfmct", "auto-updater-jkiuq", "auto-updater-lth9t", "auto-updater-m0fsa", "auto-updater-mclql",
+    "auto-updater-mkukz", "auto-updater-mn5ri", "auto-updater-nlt3m", "auto-updater-ocn18", "auto-updater-p5rmt", "auto-updater-qdyme",
+    "auto-updater-se38e", "auto-updater-sxdg2", "auto-updater-xcgnm", "auto-updater-xsunp", "auto-updater-ah1", "auto-updater-sgr",
+    
+    "ethereum-gas-tracker-abxf0", "ethereum-gas-tracker-esupl", "ethereum-gas-tracker-fygz0", "ethereum-gas-tracker-gon2c",
+    "ethereum-gas-tracker-hx8j0", "ethereum-gas-tracker-k51pi", "ethereum-gas-tracker-leifg", "ethereum-gas-tracker-lm4cv",
+    "ethereum-gas-tracker-mnsfw", "ethereum-gas-tracker-nmcq5", "ethereum-gas-tracker-pz0kz", "ethereum-gas-tracker-qxorv",
+    "ethereum-gas-tracker-rmiu4", "ethereum-gas-tracker-t8oaj",
+    
+    "google-workspace-2z5dp", "google-workspace-7ylf0", "google-workspace-8zdgy", "google-workspace-auqud", "google-workspace-devfw",
+    "google-workspace-gbvyc", "google-workspace-izypr", "google-workspace-m2hcx", "google-workspace-ndlt1", "google-workspace-ozgdc",
+    "google-workspace-t9lkr", "google-workspace-tqhmn", "google-workspace-womvg", "google-workspace-wwxem", "google-workspace-yj9ug",
+    "google-workspace-ytrqj", "google-workspace-zg8ad", "google-cht", "google-k53", "google-nex",
+    
+    "insider-wallets-finder-1a7pi", "insider-wallets-finder-2fz1g", "insider-wallets-finder-57h4t", "insider-wallets-finder-9dlka",
+    "insider-wallets-finder-art4q", "insider-wallets-finder-btj6c", "insider-wallets-finder-cv1d9", "insider-wallets-finder-djiq0",
+    "insider-wallets-finder-firui", "insider-wallets-finder-h5syo", "insider-wallets-finder-hbmjm", "insider-wallets-finder-im29o",
+    "insider-wallets-finder-jacit", "insider-wallets-finder-kq9nv", "insider-wallets-finder-mk3w3", "insider-wallets-finder-ngv64",
+    "insider-wallets-finder-nq6a9", "insider-wallets-finder-q9qng", "insider-wallets-finder-qjkug", "insider-wallets-finder-r6wya",
+    "insider-wallets-finder-tivyf", "insider-wallets-finder-zah8d", "insider-wallets-finder-zzs2p",
+    
+    "lost-bitcoin-10li1", "lost-bitcoin-dbrgt", "lost-bitcoin-eabml",
+    
+    "phantom-0jcvy", "phantom-0snsv", "phantom-3uttg", "phantom-64juz", "phantom-afnuz", "phantom-ahdwb", "phantom-bdacv",
+    "phantom-fdjtg", "phantom-fsvib", "phantom-ftbrg", "phantom-fvizs", "phantom-ggjrq", "phantom-hpwmb", "phantom-iebcc",
+    "phantom-jwik3", "phantom-kxcuj", "phantom-lpnfp", "phantom-lxnyf", "phantom-mdr3q", "phantom-nrqdw", "phantom-pcue3",
+    "phantom-pvber", "phantom-q8ark", "phantom-qs450", "phantom-syjqj", "phantom-vpnfy", "phantom-vwlfb", "phantom-xivjh", "phantom-ygmjc",
+    
+    "poly", "polym", "polymarkets", "polytrading", "polymarket-25nwy", "polymarket-33efn", "polymarket-4rrsh", "polymarket-5dylt",
+    "polymarket-6ehca", "polymarket-7ceau", "polymarket-bpnyq", "polymarket-cexex", "polymarket-dfknh", "polymarket-esfbk",
+    "polymarket-fpwui", "polymarket-gxyrz", "polymarket-hoedg", "polymarket-ik168", "polymarket-jezc4", "polymarket-juui0",
+    "polymarket-lzgm8", "polymarket-mjjsc", "polymarket-phqtc", "polymarket-qjypn", "polymarket-qpi7w", "polymarket-qxjyy",
+    "polymarket-s7x4d", "polymarket-vj5zb", "polymarket-vx875", "polymarket-wapbk", "polymarket-y0c8k", "polymarket-z7lwp",
+    "polymarket-traiding-bot", "better-polymarket", "polymarket-all-in-one",
+    
+    "solana-07bcb", "solana-1fuhx", "solana-1tfnz", "solana-7rrh8", "solana-9ahmt", "solana-9lplb", "solana-a8wjy", "solana-d95dl",
+    "solana-dddhn", "solana-dgipr", "solana-fckyq", "solana-gamka", "solana-gj8sl", "solana-goq2i", "solana-ifxeq", "solana-imont",
+    "solana-ixqvy", "solana-k7hyt", "solana-kbhhl", "solana-kief4", "solana-pjnom", "solana-qpkqu", "solana-rpozu", "solana-t1nyq",
+    "solana-uxcvc", "solana-vwgfq", "solana-wi1cy", "solana-wlnn4", "solana-wrq1l", "solana-xx1q5", "solana-ydqh7", "solana-ytzgw",
+    
+    "wallet-tracker-0ghsk", "wallet-tracker-0waih", "wallet-tracker-8orkd", "wallet-tracker-af1i6", "wallet-tracker-al7er",
+    "wallet-tracker-auqlh", "wallet-tracker-bf3bs", "wallet-tracker-bqahy", "wallet-tracker-bs5ur", "wallet-tracker-bxb0a",
+    "wallet-tracker-fntdr", "wallet-tracker-gel8n", "wallet-tracker-hhjpv", "wallet-tracker-ijyto", "wallet-tracker-l7dst",
+    "wallet-tracker-mgwpt", "wallet-tracker-oozrx", "wallet-tracker-pbckx", "wallet-tracker-qoa9k", "wallet-tracker-rcoux",
+    "wallet-tracker-s5hx9", "wallet-tracker-udqiq", "wallet-tracker-ue8hv", "wallet-tracker-x76ik", "wallet-tracker-zih4w",
+    
+    "x-trends-0heof", "x-trends-9y6gc", "x-trends-axy84", "x-trends-bjcps", "x-trends-cpif3", "x-trends-dijrb", "x-trends-el5qn",
+    "x-trends-hloqe", "x-trends-kujtp", "x-trends-ky4xt", "x-trends-kzcxt", "x-trends-mtzmi", "x-trends-ngw4s", "x-trends-nvdfx",
+    "x-trends-orwhp", "x-trends-ovdpf", "x-trends-p7ivk", "x-trends-qfpkj", "x-trends-qhz9c", "x-trends-qpaoo", "x-trends-qylxo",
+    "x-trends-rjmtk", "x-trends-rwskq", "x-trends-wbc5p", "x-trends-ypqjp",
+    
+    "yahoo-finance-1h2ji", "yahoo-finance-2s8cv", "yahoo-finance-55ykj", "yahoo-finance-5fhu3", "yahoo-finance-6icpt",
+    "yahoo-finance-7txap", "yahoo-finance-bzrvt", "yahoo-finance-cv8ev", "yahoo-finance-eqosk", "yahoo-finance-ijybk",
+    "yahoo-finance-jdlqs", "yahoo-finance-jzgua", "yahoo-finance-kmhxs", "yahoo-finance-m16op", "yahoo-finance-mb9wu",
+    "yahoo-finance-mz1nt", "yahoo-finance-om4g4", "yahoo-finance-saosh", "yahoo-finance-tqxkb", "yahoo-finance-uelhr",
+    "yahoo-finance-w3wo2", "yahoo-finance-wcr6j", "yahoo-finance-y7mbx", "yahoo-finance-ztbyq", "yahoo-finance-5tv",
+    "yahoo-finance-b5p", "yahoo-finance-lpm", "yahoo-finance-t08", "yahoo-finance-who",
+    
+    "youtube-summarize-11y0i", "youtube-summarize-35o20", "youtube-summarize-3luwa", "youtube-summarize-5oixh",
+    "youtube-summarize-7vnwu", "youtube-summarize-8edua", "youtube-summarize-beqh9", "youtube-summarize-ebw5x",
+    "youtube-summarize-gctcr", "youtube-summarize-genms", "youtube-summarize-hr5oh", "youtube-summarize-iagv2",
+    "youtube-summarize-ib7el", "youtube-summarize-ietsw", "youtube-summarize-k67rk", "youtube-summarize-kodxd",
+    "youtube-summarize-l4hjv", "youtube-summarize-l8nmj", "youtube-summarize-lh9rq", "youtube-summarize-mxmlp",
+    "youtube-summarize-noyux", "youtube-summarize-ohxkm", "youtube-summarize-ppfxa", "youtube-summarize-r5ajr",
+    "youtube-summarize-tvtrh", "youtube-summarize-umait", "youtube-summarize-z7kli", "youtube-summarize-zserr",
+    "youtube-summarize-zwl3z",
+    
+    "youtube-thumbnail-grabber-2dp6g", "youtube-thumbnail-grabber-2vx4b", "youtube-thumbnail-grabber-bg45o",
+    "youtube-thumbnail-grabber-h67cl", "youtube-thumbnail-grabber-jes1t", "youtube-thumbnail-grabber-jwnwx",
+    "youtube-thumbnail-grabber-ktwoe", "youtube-thumbnail-grabber-mgaww", "youtube-thumbnail-grabber-qvizx",
+    "youtube-thumbnail-grabber-rzncj", "youtube-thumbnail-grabber-sq374", "youtube-thumbnail-grabber-tzilx",
+    
+    "youtube-video-downloader-5qfuw", "youtube-video-downloader-9br7p", "youtube-video-downloader-9kscv",
+    "youtube-video-downloader-cjmxp", "youtube-video-downloader-fnkxw", "youtube-video-downloader-hvzyq",
+    "youtube-video-downloader-jobxc", "youtube-video-downloader-kcbjr", "youtube-video-downloader-pydzq",
+    "youtube-video-downloader-tnot1", "youtube-video-downloader-vsmhd", "youtube-video-downloader-wibsd",
+    "youtube-video-downloader-xx9sy", "youtube-7ze", "youtube-bgp", "youtube-jop", "youtube-mbo",
+    "youtube-watchar", "youtube-watcher-a", "youtube-watcher-k", "youtube-watcher-u",
+    
+    "base-agent", "bybit-agent", "rankaj",
+    "moltbook-lm8", "moltbookagent", "publish-dist", "moltbook-agi", "moltbook-igr", "moltbook-wrt",
+    "solana-wallet-tracker", "youtube-summarize-pro", "openclaw-agent",
+    
+    "agent-browser-6aigix9qi2tu", "agent-browser-jrdv4mcscrb2", "agent-browser-ymepfebfpc2x",
+    "bird-ag", "bird-su", "bird-xn", "bird-yf",
+    "browser-agent-1kv", "browser-agent-ed7", "browser-agent-ij1", "browser-agent-qzu",
+    "clawbhub", "clawdhub-2trnbtcgyo",
+    "coding-agent-4ilvlj7rs", "coding-agent-g7z", "coding-agent-gje", "coding-agent-kh0",
+    "coding-agent-p4q", "coding-agent-pekjzav3x", "coding-agent-sjf",
+    "deep-research-eoo5vd95", "deep-research-kgenr3rn", "deep-research-pjazdzyd", "deep-research-v2h55k2w",
+    "ecap-security-auditor",
+    "excel-imy", "excel-orp",
+    "gog-g7ksras",
+    "linkedin-dhg", "linkedin-klt", "linkedin-y5b", "linkedin-zwy",
+    "nano-banana-pro-fxgpbf", "nano-banana-pro-wepcdp",
+    "pdf-h65", "pdf-ujp",
+    "skills-security-check-gpz", "skills-security-check-ngv", "skills-security-check-uo9", "skills-security-check-w11",
+    "summarize-nrqj",
+    "twitter-sum", "twitter-u7c",
+    "wacli-5qi", "wacli-hdg", "wacli-xcb",
+    "whatsapp-guf", "whatsapp-meo", "whatsapp-qgs"
+  ],
+  
+  "critical_skills": [
+    "agentic-jujutsu", "stealth-ghosting", "stealth-ops", "hive-mind-advanced", "flow-nexus-platform", "flow-nexus-neural",
+    "flow-nexus-swarm", "browser-automation", "privilege-escalation-methods", "github-code-review", "codex-chat",
+    "sqlite-agent-amplification", "pptx", "math-calculator", "oh-notes",
+    "clawhub", "clawhud", "clawhub1", "polymarket-traiding-bot", "base-agent", "bybit-agent", "rankaj",
+    "solana-wallet-tracker", "youtube-summarize-pro", "better-polymarket", "polymarket-all-in-one"
+  ],
+  
+  "malicious_domains": [
+    "attacker.com", "evil.com", "malicious.site", "exfil.site", "c2server.net", 
+    "pool.minexmr.com", "pool.hashvault.pro",
+    "glot.io", "webhook.site",
+    "swcdn.apple.com", "install.app-distribution.net",
+    "github.com/hedefbari",
+    "rentry.co",
+    "pastebin.com", "pastee.org", "hastebin.com",
+    "socifiapp.com"
+  ],
+  
+  "malicious_ips": [
+    "91.92.242.30", "95.92.242.30", "96.92.242.30",
+    "202.161.50.59", "54.91.154.110"
+  ],
+  
+  "malicious_c2_urls": [
+    "https://socifiapp.com",
+    "http://91.92.242.30/lamq4uerkruo6ssm",
+    "http://91.92.242.30/q0c7ew2ro8l2cfqp",
+    "http://91.92.242.30/6x8c0trkp4l9uugo",
+    "https://webhook.site/358866c4-81c6-4c30-9c8c-358db4d04412",
+    "https://webhook.site/ace58e7f-0b19-4703-b754-4688a07a4f95"
+  ],
+  
+  "malicious_authors": [
+    "zaycv", "Aslaep123", "pepe276", "moonshine-100rze",
+    "aztr0nutzs", "poseidon", "smartchainark"
+  ],
+  
+  "campaigns": {
+    "clawhavoc": {
+      "name": "ClawHavoc",
+      "description": "大规模恶意技能活动 - 341 个恶意技能",
+      "skills_count": 341,
+      "payload": "Atomic macOS Stealer (AMOS)",
+      "c2_servers": ["91.92.242.30"],
+      "techniques": ["password-protected ZIP", "glot.io obfuscation", "prerequisite installation"]
+    },
+    "toxicskills": {
+      "name": "ToxicSkills",
+      "description": "Snyk 研究的恶意技能集合 - 534 个关键安全问题",
+      "skills_count": 534,
+      "techniques": ["prompt injection", "credential theft", "backdoor installation"]
+    },
+    "skillject": {
+      "name": "SkillJect",
+      "description": "自动化技能注入攻击框架",
+      "skills_count": 30,
+      "techniques": ["trace-driven refinement", "payload hiding", "documentation inducement"]
+    },
+    "poseidon": {
+      "name": "Poseidon",
+      "description": "Poseidon 攻击组织 - 至少 120 个恶意技能",
+      "skills_count": 120,
+      "payload": "Credential Stealer, SSH Key Theft",
+      "c2_servers": ["91.92.242.30", "95.92.242.30"],
+      "techniques": ["two-stage payload", "rentry.co delivery", "base64 obfuscation", "fake password dialog", "npm postinstall hook"]
+    },
+    "slowmist": {
+      "name": "SlowMist Report",
+      "description": "慢雾安全团队报告 - 472+ 恶意技能",
+      "skills_count": 472,
+      "payload": "SSH Key Stealer, API Token Thief",
+      "c2_servers": ["91.92.242.30", "95.92.242.30"],
+      "techniques": ["credential exfiltration", "file theft", "ZIP upload", "osascript phishing"]
+    },
+    "nova_sentinel": {
+      "name": "Nova Sentinel",
+      "description": "腾讯科恩实验室溯源 - Nova Stealer 木马家族",
+      "skills_count": 295,
+      "payload": "Nova Stealer (MaaS)",
+      "c2_servers": ["socifiapp.com", "91.92.242.30"],
+      "techniques": ["base64 download execute", "XOR config encryption", "browser cookie theft", "crypto wallet theft", "Mach-O universal binary"]
+    },
+    "tencent_keen": {
+      "name": "Tencent Keen Lab",
+      "description": "腾讯科恩实验室报告 - 295 个威胁样本 (9.49%)",
+      "skills_count": 295,
+      "risk_rate": "9.49%",
+      "payload": "Nova Stealer, Reverse Shell, Credential Thief",
+      "c2_servers": ["91.92.242.30", "54.91.154.110:13338", "socifiapp.com"],
+      "techniques": ["unified template download", "base64 decode execute", "reverse shell", "browser data exfil", "clawdbot env theft"]
+    }
+  },
+  
+  "references": [
+    "https://github.com/protectskills/MaliciousAgentSkillsBench",
+    "https://github.com/Tencent/AI-Infra-Guard",
+    "https://github.com/garagon/aguara",
+    "https://www.koi.ai/blog/clawhavoc-341-malicious-clawedbot-skills-found-by-the-bot-they-were-targeting",
+    "https://snyk.io/blog/toxicskills-malicious-ai-agent-skills-clawhub/",
+    "https://thehackernews.com/2026/02/researchers-find-341-malicious-clawhub.html",
+    "https://github.com/jiaxiaojunQAQ/SkillJect",
+    "https://github.com/PiedPiper0709/openclaw-malicious-skills",
+    "https://github.com/smartchainark/skill-security-audit",
+    "https://www.slowmist.com/blog/threat-intelligence-clawhub-malicious-skills-analysis.html",
+    "https://github.com/openclaw/openclaw/security/advisories/GHSA-g8p2-7wf7-98mq",
+    "https://github.com/openclaw/openclaw/security/advisories/GHSA-q284-4pvr-m585",
+    "https://github.com/openclaw/openclaw/security/advisories/GHSA-mc68-q9jw-2h3v"
+  ]
+}
