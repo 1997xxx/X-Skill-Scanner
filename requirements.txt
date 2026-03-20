@@ -1,4 +1,4 @@
-# Omni Skill Scanner - 依赖清单
+# Ant International Skill Scanner - 依赖清单
 # 安装：pip install -r requirements.txt
 
 # 核心依赖
