@@ -37,6 +37,45 @@ metadata:
 
 **核心原则：任何技能安装前必须经过安全扫描**
 
+### 触发条件（重要）
+
+**当用户在会话中提及以下关键词时，默认先执行安全扫描：**
+
+- "安装 skill" / "安装技能"
+- "install skill" / "skill install"
+- "clawhub install" / "aone-kit skill install"
+- "下载技能" / "添加技能"
+- "新技能" / "new skill"
+- 任何包含 `install` + `skill` 的组合
+
+**Agent 行为：**
+1. 检测到安装意图 → **立即提示先扫描**
+2. 提供扫描命令或自动执行扫描
+3. 扫描通过后才允许安装
+
+### 会话触发响应模板
+
+当检测到用户提及"skill 安装"相关命令时，Agent 应回复：
+
+```
+🔒 安全提示：检测到您要安装技能。根据安全策略，安装前必须先进行安全扫描。
+
+正在运行安全扫描...
+[执行：./scan -t <skill-path>]
+
+扫描结果：
+✅ 风险等级：LOW/MEDIUM/HIGH
+✅ 风险分数：X/100
+✅ 结论：SAFE TO INSTALL / INSTALL WITH CAUTION / DO NOT INSTALL
+
+[扫描通过后] 技能已扫描完成，可以安全安装。
+```
+
+**触发关键词：**
+- 中文：安装 skill、安装技能、下载技能、添加技能、新技能
+- 英文：install skill, skill install, add skill, new skill, download skill
+- 命令：clawhub install, aone-kit skill install, tnpm install, npm install -g
+
 ### 适用场景
 
 本扫描器覆盖以下所有技能安装方式：
@@ -48,6 +87,8 @@ metadata:
 | **本地技能** | 本地开发的技能 | ✅ 开发时扫描 |
 | **技能市场** | 其他技能市场 | ✅ 安装前扫描 |
 | **共享技能** | 其他 Agent 分享的 | ✅ 强制扫描 |
+| **Aone-kit** | `aone-kit skill install` | ✅ 会话触发扫描 |
+| **AIWay** | AIWay API 安装 | ✅ 会话触发扫描 |
 
 ### 扫描流程
 

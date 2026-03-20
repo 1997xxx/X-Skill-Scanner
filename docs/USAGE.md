@@ -78,6 +78,31 @@ openclaw gateway restart
 
 配置后，安装技能时自动触发安全检查。
 
+### 会话触发扫描
+
+**当用户在会话中提及"skill 安装"相关命令时，Agent 会自动：**
+
+1. **检测安装意图** - 识别关键词（安装 skill, install skill 等）
+2. **提示安全扫描** - 告知用户需要先扫描
+3. **执行扫描** - 自动运行 `./scan -t <skill-path>`
+4. **显示结果** - 展示风险等级和结论
+5. **允许安装** - 扫描通过后才继续安装
+
+**触发关键词：**
+- 中文：安装 skill、安装技能、下载技能、添加技能
+- 英文：install skill, skill install, add skill, download skill
+- 命令：clawhub install, aone-kit skill install, AIWay install
+
+**多路径监控：** 自动监控以下所有技能安装位置：
+
+- `~/.openclaw/skills/` - OpenClaw 标准路径
+- `~/.openclaw/workspace/skills/` - Workspace 路径
+- `~/.openclaw/workspace/.claude/skills/` - Claude 风格路径
+- `~/.claude/skills/` - 用户 Claude 路径
+- `./.claude/skills/` - 当前工作区路径
+- `~/.aone/skills/` - Aone-kit 路径
+- `~/.aiway/skills/` - AIWay 路径
+
 ### 手动扫描
 
 ```bash
@@ -92,6 +117,16 @@ python3 scanner.py -t ./my-skill/ --semantic --json > report.json
 
 # 递归扫描所有技能
 python3 scanner.py -t ~/.openclaw/workspace/skills/ -r
+```
+
+### 变更检测
+
+```bash
+# 检查所有监控路径的技能变化
+bash check-skills-change.sh
+
+# 强制重新创建快照
+bash check-skills-change.sh --force
 ```
 
 ### 风险等级
