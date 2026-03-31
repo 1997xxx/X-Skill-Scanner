@@ -59,16 +59,16 @@ from network_profiler import NetworkProfiler
 # v3.6 新增引擎 — 参考 SmartChainArk / 慢雾安全 / 腾讯科恩实验室报告
 from credential_theft_detector import CredentialTheftDetector
 
-# v4.0 新增引擎 — LLM 二次审查
+# v4.0/v5.0 新增引擎 — LLM 二次审查
 from llm_reviewer import LLMReviewer
 
-# v4.1 新增引擎 — 技能画像 + 误报预过滤
+# v5.0 新增引擎 — 技能画像 + 误报预过滤
 from skill_profiler import SkillProfiler
 from fp_filter import FPFilter
 
 
 class SkillScanner:
-    """技能安全扫描器 v4.0 — 轻量初筛 + LLM 二次审查"""
+    """技能安全扫描器 v5.0 — 轻量初筛 + LLM 二次审查"""
 
     # ─── 统一风险等级阈值 (与 risk_scorer.py 一致) ──────────────
     RISK_THRESHOLDS = {
@@ -176,11 +176,11 @@ class SkillScanner:
         self.enable_credential_theft_detection = True
         self.credential_theft_detector = CredentialTheftDetector()
 
-        # v4.0 新增引擎 — LLM 二次审查
-        self.enable_llm_review = True   # v4.1: 默认开启
+        # v4.0/v5.0 新增引擎 — LLM 二次审查
+        self.enable_llm_review = True   # v5.0: 默认开启
         self.llm_reviewer = None
 
-        # v4.1 新增引擎 — 技能画像 + 误报预过滤
+        # v5.0 新增引擎 — 技能画像 + 误报预过滤
         self.skill_profiler = SkillProfiler()
         self.fp_filter = FPFilter()
         self._skill_profile = None      # 扫描时填充
@@ -372,7 +372,7 @@ class SkillScanner:
         all_findings: List[Dict] = []
         static_findings = []  # default, may be set by engine
 
-        # ─── v4.1: 技能画像（先获取基本情况）─────────────────────
+        # ─── v5.0: 技能画像（先获取基本情况）─────────────────────
         _p("🔎 步骤 0.5: 技能画像...")
         try:
             self._skill_profile = self.skill_profiler.profile(target)
@@ -861,14 +861,14 @@ class SkillScanner:
             except Exception as e:
                 _p(f"\n⚠️  关联分析失败: {e}")
 
-        # ─── v4.1: 误报预过滤 + LLM 二次审查 ─────────────────
+        # ─── v5.0: 误报预过滤 + LLM 二次审查 ─────────────────
         llm_review_summary = None
         fp_filter_summary = None
         
         if all_findings:
             # 步骤 1: 误报预过滤（快速，不调用 LLM）
             if self.fp_filter:
-                _p("\n🔍 v4.1 误报预过滤...")
+                _p("\n🔍 v5.0 误报预过滤...")
                 kept_findings, filter_results = self.fp_filter.filter_findings(all_findings)
                 fp_filter_summary = self.fp_filter.get_filter_summary(filter_results)
                 
@@ -1071,12 +1071,12 @@ def _generate_sarif(result: Dict) -> str:
 
     sarif = {
         '$schema': 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json',
-        'version': '2.1.0',
+        'version': '5.0.0',
         'runs': [{
             'tool': {
                 'driver': {
                     'name': 'X Skill Scanner',
-                    'version': result.get('scanner_version', '3.0.0'),
+                    'version': result.get('scanner_version', '5.0.0'),
                     'informationUri': 'https://github.com/1997xxx/X-Skill-Scanner',
                     'rules': list(rules.values()),
                 },
@@ -1108,7 +1108,7 @@ def _sarif_level(severity: str) -> str:
 def main():
     """命令行入口"""
     parser = argparse.ArgumentParser(
-        description='X Skill Scanner v3.0 - AI 技能安全扫描器',
+        description='X Skill Scanner v5.0 - AI 技能安全扫描器',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='''
 示例:
@@ -1155,7 +1155,7 @@ def main():
     parser.add_argument('--no-baseline', action='store_true', help='跳过基线比对')
     parser.add_argument('--no-deps', action='store_true', help='跳过依赖检查')
     parser.add_argument('--baseline-only', action='store_true', help='仅执行基线比对')
-    parser.add_argument('--no-llm-review', action='store_true', help='禁用 LLM 二次审查（v4.1 默认启用）')
+    parser.add_argument('--no-llm-review.*v5.0 默认启用）')
     parser.add_argument('--no-fp-filter', action='store_true', help='禁用误报预过滤器')
     parser.add_argument('--update-baseline', action='store_true', help='更新基线后退出')
     parser.add_argument('--profile-only', action='store_true', help='仅输出技能画像后退出')
@@ -1210,7 +1210,7 @@ def main():
         enable_whitelist=not args.no_whitelist,
     )
     
-    # v4.1: LLM 二次审查（默认启用，可用 --no-llm-review 禁用）
+    # v5.0: LLM 批量审查（默认启用，可用 --no-llm-review 禁用）
     if not args.no_llm_review:
         try:
             scanner.enable_llm_review = True
@@ -1222,7 +1222,7 @@ def main():
     else:
         _p("⚠️  LLM 二次审查已禁用")
     
-    # v4.1: 误报预过滤器（默认启用）
+    # v5.0: 误报预过滤器（默认启用）
     if args.no_fp_filter:
         scanner.fp_filter = None
         _p("⚠️  误报预过滤器已禁用")
@@ -1249,7 +1249,7 @@ def main():
         )
         sys.exit(0)
 
-    # v4.1: 画像专用模式
+    # v5.0: 画像专用模式
     if args.profile_only:
         from skill_profiler import SkillProfiler
         profiler = SkillProfiler()

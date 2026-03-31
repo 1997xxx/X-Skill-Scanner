@@ -1,7 +1,7 @@
 # X Skill Scanner
 """AI 技能安全扫描器 - 统一库模块"""
 
-__version__ = "2.0.0"
+__version__ = "5.0.0"
 __author__ = "X Skill Scanner Team"
 
 from .models import Finding, Severity, FindingType

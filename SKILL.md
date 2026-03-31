@@ -1,6 +1,6 @@
 ---
 name: x-skill-scanner
-version: 4.1.0
+version: 5.0.0
 author: 吸音
 license: MIT
 description: >
@@ -159,19 +159,20 @@ python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py --url <skill-url>
 
 ---
 
-## 架构升级 / Architecture Upgrade (v4.1)
+## 架构升级 / Architecture Upgrade (v5.0)
 
-**v4.0 → v4.1 核心改进：**
+**v4.1 → v5.0 核心改进：**
 
-| 改进项 | v4.0 | v4.1 |
+| 改进项 | v4.1 | v5.0 |
 |-------|------|------|
-| 扫描策略 | 所有技能同一管线 | 技能画像 → 自适应策略 |
-| LLM 审查 | 需 `--llm-review` 手动开启 | 默认开启，`--no-llm-review` 关闭 |
-| 误报处理 | 仅 LLM 审查 | 误报预过滤 + LLM 二次审查 |
-| 规则引擎 | 12 层独立检测 | 跨层关联 + 上下文感知 |
-| FP 过滤率 | ~70% | **~99%** (安全工具自引用) |
+| 扫描策略 | 固定 12 层全跑 | 画像驱动：quick(3)/standard(12)/full(12) |
+| LLM 审查 | 逐条调用 (N 次) | 按文件分组批量审查 (~N/5 次) |
+| 攻击链检测 | ❌ 无 | ✅ 6 种多阶段攻击链 |
+| 风险评分 | 简单累加 | 跨层叠加 + 关联加成 |
+| API 调用次数 | 高 | 减少 **70%+** |
 
 **新增模块：**
+- `lib/correlation_engine.py` — 跨层关联分析（6 种攻击链 + 多引擎交叉确认）
 - `lib/skill_profiler.py` — 技能画像引擎（信任评分 + 策略推荐）
 - `lib/fp_filter.py` — 误报预过滤器（8 类误报模式 + 5 类真实威胁指标）
 

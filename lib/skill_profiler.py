@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Skill Profiler v4.1 — 技能画像引擎
+Skill Profiler v5.0 — 技能画像引擎
 
 设计理念：
 - 在深度扫描前先获取技能基本情况

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-False Positive Pre-Filter v4.1 — 误报预过滤器
+False Positive Pre-Filter v5.0 — 误报预过滤器
 
 设计理念：
 - 在 LLM 审查前自动过滤明显误报

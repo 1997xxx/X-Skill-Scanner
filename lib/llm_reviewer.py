@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-LLM 二次审查引擎 v4.0 — AI-Powered Finding Reviewer
+LLM 二次审查引擎 v5.0 — AI-Powered Finding Reviewer
 
 设计理念：
 - 规则引擎负责"宁可错杀不可放过"（高召回率）
