@@ -92,6 +92,7 @@ NETWORK_PATTERNS = [
     
     # Python socket
     (r'socket\.socket\(\).*connect\s*\(\s*\(\s*["\']([^"\']+)["\']', 'python_socket'),
+    (r'socket\.connect\s*\(\s*\(\s*["\']([^"\']+)["\']', 'python_socket_connect'),
     
     # Raw IP addresses in URLs
     (r'https?://(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', 'ip_url'),
@@ -368,6 +369,7 @@ class NetworkProfiler:
             (r'(?:callback|reverse.connect|back.connect)', 'Reverse Connection'),
         ]
         
+        # Check single-line patterns first
         lines = content.split('\n')
         for line_num, line in enumerate(lines, 1):
             for pattern, desc in c2_indicators:
@@ -385,6 +387,30 @@ class NetworkProfiler:
                         line_number=line_num,
                         category='c2_communication',
                         confidence=0.8,
+                        remediation='立即阻断并深入调查',
+                    ))
+                    break
+        
+        # v3.6: Multi-line C2 detection — while True + sleep pattern across lines
+        if not findings:
+            multiline_c2 = [
+                (r'while\s+True:[\s\S]{0,200}(?:sleep|time\.sleep)', 'Persistent Connection Loop (multi-line)'),
+                (r'(?:import\s+time[\s\S]{0,100}|time[\s\S]{0,100}import)[\s\S]{0,200}while\s+True', 'Timed Loop Pattern'),
+            ]
+            for pattern, desc in multiline_c2:
+                if re.search(pattern, content, re.IGNORECASE):
+                    findings.append(NetworkFinding(
+                        rule_id='NET_C2_002',
+                        title=f'C2 通信特征: {desc}',
+                        severity='CRITICAL',
+                        description=(
+                            f'检测到跨行 C2 通信特征（多行模式）。\n\n'
+                            f'特征: {desc}'
+                        ),
+                        file_path=str(file_path),
+                        line_number=1,
+                        category='c2_communication',
+                        confidence=0.7,
                         remediation='立即阻断并深入调查',
                     ))
                     break
