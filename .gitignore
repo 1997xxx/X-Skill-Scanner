@@ -26,3 +26,5 @@ data/baseline.json
 lib/.semantic_cache.json
 tmp/
 config/whitelist.json
+.skills-snapshot-multi.txt
+*.snapshot*
