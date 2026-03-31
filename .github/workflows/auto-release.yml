@@ -1,0 +1,52 @@
+name: Auto Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  auto-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version
+        id: version
+        run: |
+          # Try scanner.py first, fallback to CHANGELOG.md
+          VERSION=$(grep -oP "scanner_version.*['\"]\K[^'\"]+" lib/scanner.py 2>/dev/null || echo "")
+          if [ -z "$VERSION" ]; then
+            VERSION=$(head -1 CHANGELOG.md | grep -oP 'v[\d.]+' || echo "v0.0.0")
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Detected version: $VERSION"
+
+      - name: Check if release exists
+        id: check
+        run: |
+          if gh release view "${{ steps.version.outputs.version }}" &>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Release already exists"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Creating new release"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Release
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          TAG="${{ steps.version.outputs.version }}"
+          TITLE="$TAG - $(head -1 CHANGELOG.md | sed "s/^# $TAG //")"
+          gh release create "$TAG" \
+            --title "$TITLE" \
+            --generate-notes \
+            --latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
