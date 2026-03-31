@@ -13,10 +13,7 @@ env/
 *.swo
 .DS_Store
 Thumbs.db
-reports/*.json
-reports/*.md
-reports/*.txt
-!reports/.gitkeep
+reports/
 *.log
 .pytest_cache/
 .coverage
