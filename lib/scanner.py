@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-X Skill Scanner v3.6.0 - 主扫描器
+X Skill Scanner v3.7.0 - 主扫描器
 十二层防御管线：威胁情报 → 去混淆 → 静态分析 → AST → 依赖检查 → 提示词注入 → 基线比对 → 语义审计 → 熵值分析 → 安装钩子 → 网络行为画像 → 凭证窃取检测
 
 版本演进:
@@ -11,6 +11,7 @@ X Skill Scanner v3.6.0 - 主扫描器
 - v3.4: MurphySec 报告整合 + 攻击手法分析
 - v3.5: 报告格式全面升级 (HTML/MD/Text 统一结构)
 - v3.6: 凭证窃取检测 + CJK 自适应熵值 + 零信任白名单 + 误报调优
+- v3.7: 误报消除引擎 — 规则定义上下文过滤 + 非可执行上下文识别 + typosquat 空名修复
 """
 
 import os
@@ -782,7 +783,7 @@ class SkillScanner:
         result = {
             'target': str(target),
             'scan_time': datetime.now().isoformat(),
-            'scanner_version': '3.6.0',
+            'scanner_version': '3.7.0',
             'total_files': total_files,
             'total_findings': len(all_findings),
             'findings_by_severity': findings_by_severity,

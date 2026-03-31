@@ -50,6 +50,10 @@ class ThreatIntelligence:
         """
         name_lower = name.lower()
         
+        # 防御：空名称直接跳过（扫描当前目录时 target.name 为 ''）
+        if not name_lower.strip():
+            return False, None, ''
+        
         # 精确匹配 - 已知恶意技能名
         known_malicious = self.intel_data.get('known_malicious_names', [])
         for malicious_name in known_malicious:
@@ -61,9 +65,11 @@ class ThreatIntelligence:
         for pattern in typosquat_patterns:
             pattern_lower = pattern.lower()
             # 前缀匹配或包含匹配
+            # 注意：pattern_lower.startswith(name_lower) 在 name_lower 为空时会永远返回 True
+            # 所以必须确保 name_lower 非空（已在上面检查）
             if name_lower.startswith(pattern_lower + '-') or \
                name_lower.startswith(pattern_lower) or \
-               pattern_lower.startswith(name_lower) or \
+               (len(name_lower) > 0 and pattern_lower.startswith(name_lower)) or \
                name_lower.replace('-', '') == pattern_lower.replace('-', ''):
                 return True, pattern, 'TYPOSQUAT'
         
@@ -99,15 +105,66 @@ class ThreatIntelligence:
         """获取所有攻击模式"""
         return self.intel_data.get('attack_patterns', {})
     
+    @staticmethod
+    def _is_rule_definition_line(line: str) -> bool:
+        """判断一行是否处于规则定义上下文中（非实际恶意行为）"""
+        stripped = line.strip()
+        markers = [
+            r'"?pattern"?\s*[:=]', r'"?regex"?\s*[:=]',
+            r'"?indicator"?\s*[:=]', r'"?rule"?\s*[:=]',
+            r'"name"\s*:', r'"description"\s*:', r'"severity"\s*:',
+            r'rules\s*:', r'-\s*cwe\s*:',
+            r'THREAT_PATTERNS', r'attack_patterns',
+            r'r["\']',           # raw string regex literal
+        ]
+        return any(re.search(m, stripped, re.IGNORECASE) for m in markers)
+
+    @staticmethod
+    def _is_non_executable_context(line: str) -> bool:
+        """
+        判断一行是否处于非可执行上下文中。
+        包括：UI 标签、描述字符串、Markdown 内容等。
+        这些上下文中的关键词通常只是说明性文字，不代表实际恶意行为。
+        """
+        stripped = line.strip()
+        
+        # 1. 注释行
+        if stripped.startswith('#') or stripped.startswith('//'):
+            return True
+        
+        # 2. Markdown 列表项或标题
+        if stripped.startswith('- ') or stripped.startswith('* ') or stripped.startswith('#'):
+            return True
+        
+        # 3. Streamlit / Gradio 等 UI 框架的文本参数
+        ui_markers = [
+            r'st\.(markdown|text|header|subheader|caption)\s*\(',
+            r'label\s*=\s*["\']',
+            r'desc(?:ription)?\s*=\s*["\']',
+            r'help\s*=\s*["\']',
+            r'placeholder\s*=\s*["\']',
+            r'title\s*=\s*["\']',
+        ]
+        if any(re.search(m, stripped) for m in ui_markers):
+            return True
+        
+        # 4. 纯字符串字面量（无函数调用/赋值逻辑）
+        if (stripped.startswith('"') or stripped.startswith("'")):
+            if not any(kw in stripped for kw in ['def ', 'class ', 'import ', 'return ', 'if ', 'for ', 'while ']):
+                return True
+        
+        return False
+
     def check_code_patterns(self, code: str) -> List[Dict]:
         """
-        检查代码是否匹配已知攻击模式
+        检查代码是否匹配已知攻击模式 — 增强版：排除规则定义和非可执行上下文
         
         Returns:
             匹配的攻击模式列表
         """
         matches = []
         patterns = self.get_attack_patterns()
+        lines = code.split('\n')
         
         for pattern_id, pattern_info in patterns.items():
             indicators = pattern_info.get('indicators', [])
@@ -115,7 +172,24 @@ class ThreatIntelligence:
             
             for indicator in indicators:
                 try:
-                    if re.search(re.escape(indicator), code, re.IGNORECASE):
+                    escaped = re.escape(indicator)
+                    found_real_usage = False
+                    for line in lines:
+                        stripped = line.strip()
+                        
+                        # 跳过规则定义行
+                        if self._is_rule_definition_line(stripped):
+                            continue
+                        
+                        # 跳过非可执行上下文（注释、UI 标签、文档字符串等）
+                        if self._is_non_executable_context(stripped):
+                            continue
+                        
+                        if re.search(escaped, line, re.IGNORECASE):
+                            found_real_usage = True
+                            break
+                    
+                    if found_real_usage:
                         matches.append({
                             'pattern_id': pattern_id,
                             'description': pattern_info.get('description', ''),

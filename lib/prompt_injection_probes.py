@@ -194,10 +194,23 @@ PROMPT_INJECTION_PROBES = [
 
 
 class PromptInjectionTester:
-    """提示词注入测试器"""
+    """提示词注入测试器 — v3.7 优化：排除规则定义上下文"""
 
     def __init__(self):
         self.probes = PROMPT_INJECTION_PROBES
+
+    @staticmethod
+    def _is_rule_definition_line(line: str) -> bool:
+        """判断一行是否处于规则定义上下文中（非实际注入漏洞）"""
+        stripped = line.strip()
+        markers = [
+            r'"?pattern"?\s*[:=]', r'"?regex"?\s*[:=]',
+            r'"?indicator"?\s*[:=]', r'"name"\s*:',
+            r'"description"\s*:', r'"severity"\s*:',
+            r'rules\s*:', r'THREAT_PATTERNS',
+            r'r["\']',
+        ]
+        return any(re.search(m, stripped, re.IGNORECASE) for m in markers)
 
     def test_skill(self, dir_path: Path, path_filter=None) -> List[ProbeResult]:
         """扫描技能文件中的提示词注入模式"""
@@ -218,9 +231,21 @@ class PromptInjectionTester:
             except Exception:
                 continue
 
+            # 优化：安全工具文件中跳过规则定义上下文的匹配
+            fname_lower = fp.name.lower()
+            is_security_tool = any(kw in fname_lower for kw in ['scanner', 'analyzer', 'detector', 'audit', 'security'])
+
             for probe in self.probes:
-                matches = re.finditer(probe['pattern'], content)
-                for match in matches:
+                for match in re.finditer(probe['pattern'], content):
+                    # 获取匹配位置所在行
+                    pos = match.start()
+                    line_start = content.rfind('\n', 0, pos) + 1
+                    matched_line = content[line_start:content.find('\n', pos)].strip()
+                    
+                    # 跳过规则定义上下文
+                    if is_security_tool and self._is_rule_definition_line(matched_line):
+                        continue
+                    
                     results.append(ProbeResult(
                         probe_id=probe['id'],
                         category=probe['category'],

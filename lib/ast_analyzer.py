@@ -151,17 +151,23 @@ class _ASTVisitor(ast.NodeVisitor):
         for alias in node.names:
             name = alias.asname or alias.name
             self.imports[name] = alias.name
-            if alias.name in DANGEROUS_MODULES:
+            # 优化：标准库中大量模块被标记为 "DANGEROUS"（os, sys, subprocess...）
+            # 对安全扫描器、CLI 工具等来说这些是正常依赖。只在以下情况告警：
+            #   1. 同时导入了网络+文件系统模块（组合风险）
+            #   2. 导入了真正高危的模块（ctypes, pty, runpy, code）
+            truly_dangerous = {'ctypes', 'pty', 'popen2', 'commands', 'runpy', 'code'}
+            if alias.name in truly_dangerous:
                 self._add_finding(
                     rule_id='AST_001',
-                    title=f'导入危险模块: {alias.name}',
-                    severity='MEDIUM',
-                    description=f'导入了潜在危险模块 {alias.name}',
+                    title=f'导入高危模块: {alias.name}',
+                    severity='HIGH',
+                    description=f'导入了高危模块 {alias.name}（可直接执行任意代码或获取系统权限）',
                     line_number=node.lineno,
                     category='dangerous_import',
-                    confidence=0.7,
+                    confidence=0.85,
                     remediation='确认该模块的使用是否必要，限制其功能范围',
                 )
+            # 普通危险模块不再单独告警，留到 Call 级别的实际使用检测
         self.generic_visit(node)
 
     def visit_ImportFrom(self, node):
