@@ -926,7 +926,7 @@ def _generate_sarif(result: Dict) -> str:
                 'driver': {
                     'name': 'X Skill Scanner',
                     'version': result.get('scanner_version', '3.0.0'),
-                    'informationUri': 'https://github.com/1997xxx/x-skill-scanner',
+                    'informationUri': 'https://github.com/1997xxx/X-Skill-Scanner',
                     'rules': list(rules.values()),
                 },
             },

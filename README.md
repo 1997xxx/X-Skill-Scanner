@@ -43,7 +43,7 @@ ClawHub 已被 **472+ 恶意 Skills** 渗透（慢雾安全监测），包括下
 
 ```bash
 # 克隆仓库
-git clone https://github.com/1997xxx/x-skill-scanner.git
+git clone https://github.com/1997xxx/X-Skill-Scanner.git
 cd skill-scanner
 
 # 安装依赖

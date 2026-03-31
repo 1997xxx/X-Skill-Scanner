@@ -13,7 +13,7 @@ We take security vulnerabilities seriously. If you discover a security issue in 
 
 ### 📧 How to Report
 
-Use [GitHub Security Advisories](https://github.com/1997xxx/x-skill-scanner/security/advisories/new)
+Use [GitHub Security Advisories](https://github.com/1997xxx/X-Skill-Scanner/security/advisories/new)
 
 ### 📋 What to Include
 
