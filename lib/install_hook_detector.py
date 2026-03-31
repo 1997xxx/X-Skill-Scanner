@@ -208,7 +208,7 @@ class InstallHookDetector:
         return findings
 
     def _analyze_package_json(self, content: str, file_path: Path) -> List[InstallHookFinding]:
-        """深度分析 package.json 文件"""
+        """深度分析 package.json 文件 — v3.8 优化：白名单已知安全安装器"""
         findings = []
         
         import json
@@ -219,64 +219,79 @@ class InstallHookDetector:
         
         scripts = data.get('scripts', {})
         
+        # 已知安全的安装器命令（不会执行任意代码）
+        SAFE_INSTALLERS = [
+            'agent-skill-installer',
+            'openclaw-skill-installer',
+        ]
+        
         dangerous_hooks = ['postinstall', 'preinstall', 'prepare', 'install']
         for hook_name in dangerous_hooks:
-            if hook_name in scripts:
-                script_content = scripts[hook_name]
-                
-                # 检查脚本内容是否包含危险操作
-                danger_score = 0
-                danger_indicators = []
-                
-                if any(cmd in script_content for cmd in ['curl', 'wget', 'fetch']):
-                    danger_score += 2
-                    danger_indicators.append('网络下载')
-                
-                if any(cmd in script_content for cmd in ['bash', 'sh', 'zsh', 'cmd']):
-                    danger_score += 2
-                    danger_indicators.append('Shell 执行')
-                
-                if any(cmd in script_content for cmd in ['eval', 'exec']):
-                    danger_score += 3
-                    danger_indicators.append('动态执行')
-                
-                if any(cmd in script_content for cmd in ['.env', 'secret', 'token', 'key']):
-                    danger_score += 2
-                    danger_indicators.append('凭证访问')
-                
-                if danger_score >= 3:
-                    severity = 'CRITICAL' if danger_score >= 5 else 'HIGH'
-                    findings.append(InstallHookFinding(
-                        rule_id='HOOK_010',
-                        title=f'危险的 {hook_name} 脚本 (风险分: {danger_score})',
-                        severity=severity,
-                        description=(
-                            f'package.json 中的 "{hook_name}" 脚本包含危险操作。\n'
-                            f'危险指标: {", ".join(danger_indicators)}\n\n'
-                            f'脚本内容:\n```\n{script_content}\n```'
-                        ),
-                        file_path=str(file_path),
-                        line_number=0,
-                        hook_type=f'node_{hook_name}',
-                        category='install_hook',
-                        confidence=0.9,
-                        remediation=f'移除或审查 {hook_name} 脚本中的危险操作',
-                    ))
-                elif danger_score > 0:
-                    findings.append(InstallHookFinding(
-                        rule_id='HOOK_011',
-                        title=f'{hook_name} 脚本需要注意',
-                        severity='MEDIUM',
-                        description=(
-                            f'package.json 中的 "{hook_name}" 脚本:\n```\n{script_content}\n```'
-                        ),
-                        file_path=str(file_path),
-                        line_number=0,
-                        hook_type=f'node_{hook_name}',
-                        category='install_hook',
-                        confidence=0.6,
-                        remediation=f'审查 {hook_name} 脚本内容',
-                    ))
+            if hook_name not in scripts:
+                continue
+            
+            script_content = scripts[hook_name]
+            
+            # 优化：如果脚本只是调用已知安全的安装器，跳过
+            if any(safe in script_content for safe in SAFE_INSTALLERS):
+                # 检查是否只有安装器调用，没有额外危险操作
+                extra_danger = any(cmd in script_content for cmd in ['curl', 'wget', 'eval', 'exec', '.env', 'secret', 'token'])
+                if not extra_danger:
+                    continue
+            
+            # 检查脚本内容是否包含危险操作
+            danger_score = 0
+            danger_indicators = []
+            
+            if any(cmd in script_content for cmd in ['curl', 'wget', 'fetch']):
+                danger_score += 2
+                danger_indicators.append('网络下载')
+            
+            if any(cmd in script_content for cmd in ['bash', 'sh', 'zsh', 'cmd']):
+                danger_score += 2
+                danger_indicators.append('Shell 执行')
+            
+            if any(cmd in script_content for cmd in ['eval', 'exec']):
+                danger_score += 3
+                danger_indicators.append('动态执行')
+            
+            if any(cmd in script_content for cmd in ['.env', 'secret', 'token', 'key']):
+                danger_score += 2
+                danger_indicators.append('凭证访问')
+            
+            if danger_score >= 3:
+                severity = 'CRITICAL' if danger_score >= 5 else 'HIGH'
+                findings.append(InstallHookFinding(
+                    rule_id='HOOK_010',
+                    title=f'危险的 {hook_name} 脚本 (风险分: {danger_score})',
+                    severity=severity,
+                    description=(
+                        f'package.json 中的 "{hook_name}" 脚本包含危险操作。\n'
+                        f'危险指标: {", ".join(danger_indicators)}\n\n'
+                        f'脚本内容:\n```\n{script_content}\n```'
+                    ),
+                    file_path=str(file_path),
+                    line_number=0,
+                    hook_type=f'node_{hook_name}',
+                    category='install_hook',
+                    confidence=0.9,
+                    remediation=f'移除或审查 {hook_name} 脚本中的危险操作',
+                ))
+            elif danger_score > 0:
+                findings.append(InstallHookFinding(
+                    rule_id='HOOK_011',
+                    title=f'{hook_name} 脚本需要注意',
+                    severity='MEDIUM',
+                    description=(
+                        f'package.json 中的 "{hook_name}" 脚本:\n```\n{script_content}\n```'
+                    ),
+                    file_path=str(file_path),
+                    line_number=0,
+                    hook_type=f'node_{hook_name}',
+                    category='install_hook',
+                    confidence=0.6,
+                    remediation=f'审查 {hook_name} 脚本内容',
+                ))
         
         return findings
 
@@ -348,13 +363,33 @@ class InstallHookDetector:
         return findings
 
     def _scan_for_hook_patterns(self, file_path: Path) -> List[InstallHookFinding]:
-        """扫描文件中的危险钩子模式"""
+        """扫描文件中的危险钩子模式 — v3.8 优化：白名单已知安全安装器"""
         findings = []
         
         try:
             content = file_path.read_text(encoding='utf-8', errors='ignore')
         except Exception:
             return findings
+        
+        # 优化：package.json 中如果只有安全安装器，跳过扫描
+        if file_path.name == 'package.json':
+            import json
+            try:
+                data = json.loads(content)
+                scripts = data.get('scripts', {})
+                SAFE_INSTALLERS = ['agent-skill-installer', 'openclaw-skill-installer']
+                all_safe = True
+                has_hooks = False
+                for hook in ['postinstall', 'preinstall', 'prepare']:
+                    if hook in scripts:
+                        has_hooks = True
+                        if not any(s in scripts[hook] for s in SAFE_INSTALLERS):
+                            all_safe = False
+                            break
+                if has_hooks and all_safe:
+                    return findings  # 全部是安全安装器，跳过
+            except json.JSONDecodeError:
+                pass
         
         lines = content.split('\n')
         
@@ -363,6 +398,9 @@ class InstallHookDetector:
             
             for pattern, hook_type, desc in DANGEROUS_HOOK_PATTERNS:
                 if re.search(pattern, stripped, re.IGNORECASE):
+                    # 额外检查：如果行中包含安全安装器名称，跳过
+                    if any(s in stripped for s in ['agent-skill-installer', 'openclaw-skill-installer']):
+                        continue
                     findings.append(InstallHookFinding(
                         rule_id='HOOK_040',
                         title=desc,

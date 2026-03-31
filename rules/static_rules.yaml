@@ -170,7 +170,7 @@ malicious_code:
     - su\s+root
     - chmod\s+[47]\d\d
     - privilege\s+escalat
-    remediation: 移除提权代码，使用最小权限
+    remediation: 移除提权代码，使用最小权限。注意：chmod 700/600 是安全加固（限制访问），不是提权。
     severity: CRITICAL
     source: MaliciousAgentSkillsBench
   - cwe: CWE-73
@@ -371,7 +371,9 @@ supply_chain:
     - post_install|postinstall|after_install
     - setup\(.*install_requires
     - "entry_points.*console_scripts"
-    remediation: 审查安装钩子脚本，确认无副作用 / Review install hooks for side effects
+    remediation: >
+      审查安装钩子脚本，确认无副作用。
+      注意：agent-skill-installer / openclaw-skill-installer 是已知安全的官方安装器，不应告警。
     severity: HIGH
   - cwe: CWE-829
     id: SUPPLY_003

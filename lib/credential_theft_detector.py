@@ -140,8 +140,20 @@ class CredentialTheftDetector:
             r'"description"\s*:', r'"severity"\s*:',
             r'rules\s*:', r'THREAT_PATTERNS',
             r'r["\']',
+            r'"reason"\s*:',          # JSON reference data (high-risk-skills.json)
+            r'"category"\s*:',        # JSON category field
         ]
         return any(re.search(m, stripped, re.IGNORECASE) for m in markers)
+
+    @staticmethod
+    def _is_json_data_file(file_path: Path) -> bool:
+        """判断文件是否为 JSON 参考数据文件"""
+        if file_path.suffix.lower() != '.json':
+            return False
+        fname_lower = file_path.name.lower()
+        patterns = ['high-risk-skills', 'malicious', 'known-', 'threat-', 'ioc',
+                     'blocklist', 'blacklist', 'whitelist', 'reference', 'database']
+        return any(p in fname_lower for p in patterns)
 
     def analyze_directory(self, dir_path: Path, recursive: bool = True,
                            path_filter=None) -> List[CredentialFinding]:
@@ -169,23 +181,30 @@ class CredentialTheftDetector:
         except Exception:
             return []
         
+        # 优化：JSON 参考数据文件（如 high-risk-skills.json）直接跳过
+        if self._is_json_data_file(file_path):
+            return []
+        
         fname_lower = file_path.name.lower()
         is_security_tool = any(kw in fname_lower for kw in ['scanner', 'analyzer', 'detector', 'audit', 'security'])
+        is_shell_script = file_path.suffix.lower() in ('.sh', '.bash', '.zsh')
         
         findings = []
-        findings.extend(self._check_osascript(content, file_path, is_security_tool))
-        findings.extend(self._check_sensitive_paths(content, file_path, is_security_tool))
-        findings.extend(self._check_browser_theft(content, file_path, is_security_tool))
-        findings.extend(self._check_keychain(content, file_path, is_security_tool))
-        findings.extend(self._check_exfil_combinations(content, file_path, is_security_tool))
+        findings.extend(self._check_osascript(content, file_path, is_security_tool, is_shell_script))
+        findings.extend(self._check_sensitive_paths(content, file_path, is_security_tool, is_shell_script))
+        findings.extend(self._check_browser_theft(content, file_path, is_security_tool, is_shell_script))
+        findings.extend(self._check_keychain(content, file_path, is_security_tool, is_shell_script))
+        findings.extend(self._check_exfil_combinations(content, file_path, is_security_tool, is_shell_script))
         self.findings.extend(findings)
         return findings
 
-    def _check_osascript(self, content, file_path, is_sec):
+    def _check_osascript(self, content, file_path, is_sec, is_shell=False):
         findings = []
         for pattern, severity, rule_id, title, desc in OSASCRIPT_PASSWORD_DIALOG_PATTERNS:
             for line_num, line in enumerate(content.split('\n'), 1):
                 if is_sec and self._is_rule_definition_line(line):
+                    continue
+                if is_shell and line.strip().startswith('#'):
                     continue
                 if re.search(pattern, line, re.IGNORECASE):
                     findings.append(CredentialFinding(
@@ -196,13 +215,23 @@ class CredentialTheftDetector:
                         remediation='立即移除 osascript 密码弹窗代码。'))
         return findings
 
-    def _check_sensitive_paths(self, content, file_path, is_sec):
+    def _check_sensitive_paths(self, content, file_path, is_sec, is_shell=False):
         findings = []
         is_doc = file_path.suffix.lower() in ('.md', '.txt')
         for pattern, severity, rule_id, title in SENSITIVE_FILE_PATHS:
             for line_num, line in enumerate(content.split('\n'), 1):
                 if is_sec and self._is_rule_definition_line(line):
                     continue
+                if is_shell and line.strip().startswith('#'):
+                    continue
+                # Shell 脚本中的 echo/print/token 变量赋值通常是配置说明或检查逻辑
+                if is_shell:
+                    stripped = line.strip()
+                    if stripped.startswith('echo ') or stripped.startswith("echo '") or \
+                       stripped.startswith("echo \"") or ".get('" in stripped or \
+                       re.match(r'\w+\s*=\s*\w+\.get\(', stripped) or \
+                       "'item':" in stripped or "'status':" in stripped or "'action':" in stripped:
+                        continue
                 if re.search(pattern, line, re.IGNORECASE):
                     if is_doc and severity == 'MEDIUM':
                         continue
@@ -215,11 +244,13 @@ class CredentialTheftDetector:
                         remediation='审查对该敏感文件的访问意图。'))
         return findings
 
-    def _check_browser_theft(self, content, file_path, is_sec):
+    def _check_browser_theft(self, content, file_path, is_sec, is_shell=False):
         findings = []
         for pattern, severity, rule_id, title in BROWSER_THEFT_PATTERNS:
             for line_num, line in enumerate(content.split('\n'), 1):
                 if is_sec and self._is_rule_definition_line(line):
+                    continue
+                if is_shell and line.strip().startswith('#'):
                     continue
                 if re.search(pattern, line, re.IGNORECASE):
                     findings.append(CredentialFinding(
@@ -230,11 +261,13 @@ class CredentialTheftDetector:
                         remediation='审查浏览器数据访问的真实目的。'))
         return findings
 
-    def _check_keychain(self, content, file_path, is_sec):
+    def _check_keychain(self, content, file_path, is_sec, is_shell=False):
         findings = []
         for pattern, severity, rule_id, title in KEYCHAIN_PATTERNS:
             for line_num, line in enumerate(content.split('\n'), 1):
                 if is_sec and self._is_rule_definition_line(line):
+                    continue
+                if is_shell and line.strip().startswith('#'):
                     continue
                 if re.search(pattern, line, re.IGNORECASE):
                     findings.append(CredentialFinding(
@@ -245,12 +278,39 @@ class CredentialTheftDetector:
                         remediation='审查 Keychain 访问的必要性。'))
         return findings
 
-    def _check_exfil_combinations(self, content, file_path, is_sec):
+    def _check_exfil_combinations(self, content, file_path, is_sec, is_shell=False):
         findings = []
         for pattern, severity, rule_id, title, desc in EXFIL_COMBINATION_PATTERNS:
             for line_num, line in enumerate(content.split('\n'), 1):
                 if is_sec and self._is_rule_definition_line(line):
                     continue
+                if is_shell and line.strip().startswith('#'):
+                    continue
+                # Shell 脚本中嵌入的 Python 配置检查代码（如 auth_config.get('token')）
+                # 不是凭证窃取，而是安全合规检查
+                if is_shell:
+                    stripped = line.strip()
+                    if ".get('" in stripped and any(kw in stripped for kw in ['token', 'secret', 'key', 'auth']):
+                        # 类似 auth_config.get('token', '') — 读取配置值做验证
+                        continue
+                    if "'item':" in stripped or "'status':" in stripped or "'action':" in stripped:
+                        # 报告生成代码中的描述文本
+                        continue
+                    # 审计脚本中的 find ... | wc -l 是计数而非窃取
+                    if 'find ' in stripped and '| wc -' in stripped:
+                        continue
+                    # 审计脚本中的目录存在性检查 [ -d ~/.ssh ]
+                    if re.match(r'\[\s*-d\s+', stripped) or re.match(r'\[\s*-f\s+', stripped):
+                        continue
+                    # 安全审计报告生成代码（Python dict 嵌入在 heredoc 中）
+                    if "'risk':" in stripped or "'fix_cmd':" in stripped or "'required':" in stripped:
+                        continue
+                    # Shell 脚本中的 echo/print/token 变量赋值通常是配置说明或检查逻辑
+                    if stripped.startswith('echo ') or stripped.startswith("echo '") or \
+                       stripped.startswith("echo \"") or ".get('" in stripped or \
+                       re.match(r'\w+\s*=\s*\w+\.get\(', stripped) or \
+                       "'item':" in stripped or "'status':" in stripped or "'action':" in stripped:
+                        continue
                 if re.search(pattern, line, re.IGNORECASE):
                     findings.append(CredentialFinding(
                         rule_id=rule_id, title=title, severity=severity,

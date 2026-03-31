@@ -533,7 +533,7 @@
       "indicators": [
         "readFile",
         "fetch(",
-        "POST",
+        ".post(",
         "webhook",
         "exfil",
         "CONTEXT_PATH"

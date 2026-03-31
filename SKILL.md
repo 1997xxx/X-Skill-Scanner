@@ -1,11 +1,11 @@
 ---
 name: x-skill-scanner
-version: 3.6.0
+version: 4.1.0
 author: 吸音
 license: MIT
 description: >
-  X Skill Scanner — 企业级 AI Agent 技能安全扫描器（十二层防御 + 凭证窃取检测 + CJK 自适应熵值 + 零信任白名单）
-  Enterprise-grade AI Agent skill security scanner with twelve-layer defense pipeline.
+  X Skill Scanner — 企业级 AI Agent 技能安全扫描器（技能画像 + 自适应扫描 + 误报预过滤 + LLM 二次审查）
+  Enterprise-grade AI Agent skill security scanner with skill profiling, adaptive scanning, FP pre-filter, and LLM review.
   Runs locally via built-in exec + Python script. No external service required.
   Triggers on: scan skill, audit skill, check skill security, 扫描技能, 安全检查技能, 审计AI技能.
 keywords: [security, scan, audit, ai-agent, skill-security, credential-theft, prompt-injection, obfuscation]
@@ -87,6 +87,12 @@ python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py -t <skill-path>
 # 快速模式（跳过 LLM 语义审计）/ Quick mode (skip LLM semantic audit)
 python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py -t <skill-path> --no-semantic
 
+# 禁用 LLM 二次审查 / Disable LLM review
+python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py -t <skill-path> --no-llm-review
+
+# 仅输出技能画像 / Profile only
+python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py -t <skill-path> --profile-only --json
+
 # JSON 输出（机器可读）/ JSON output (machine-readable)
 python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py -t <skill-path> --json
 
@@ -152,6 +158,27 @@ python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py --url <skill-url>
 | ⛔ EXTREME | 80–100 | ❌ 立即阻止 / Block immediately |
 
 ---
+
+## 架构升级 / Architecture Upgrade (v4.1)
+
+**v4.0 → v4.1 核心改进：**
+
+| 改进项 | v4.0 | v4.1 |
+|-------|------|------|
+| 扫描策略 | 所有技能同一管线 | 技能画像 → 自适应策略 |
+| LLM 审查 | 需 `--llm-review` 手动开启 | 默认开启，`--no-llm-review` 关闭 |
+| 误报处理 | 仅 LLM 审查 | 误报预过滤 + LLM 二次审查 |
+| 规则引擎 | 12 层独立检测 | 跨层关联 + 上下文感知 |
+| FP 过滤率 | ~70% | **~99%** (安全工具自引用) |
+
+**新增模块：**
+- `lib/skill_profiler.py` — 技能画像引擎（信任评分 + 策略推荐）
+- `lib/fp_filter.py` — 误报预过滤器（8 类误报模式 + 5 类真实威胁指标）
+
+**设计原则：**
+- 安全工具自引用 → 自动标记 FP（规则定义、IOC 列表、探针文本）
+- 真实恶意代码 → 全部保留（外传、凭证窃取、反向 Shell、混淆执行）
+- 不确定 → 交给 LLM 二次审查
 
 ## 十二层防御管线 / Twelve-Layer Defense Pipeline
 

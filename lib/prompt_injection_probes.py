@@ -209,8 +209,20 @@ class PromptInjectionTester:
             r'"description"\s*:', r'"severity"\s*:',
             r'rules\s*:', r'THREAT_PATTERNS',
             r'r["\']',
+            r'"reason"\s*:',          # JSON reference data (high-risk-skills.json)
+            r'"category"\s*:',        # JSON category field
         ]
         return any(re.search(m, stripped, re.IGNORECASE) for m in markers)
+
+    @staticmethod
+    def _is_json_data_file(file_path: Path) -> bool:
+        """判断文件是否为 JSON 参考数据文件"""
+        if file_path.suffix.lower() != '.json':
+            return False
+        fname_lower = file_path.name.lower()
+        patterns = ['high-risk-skills', 'malicious', 'known-', 'threat-', 'ioc',
+                     'blocklist', 'blacklist', 'whitelist', 'reference', 'database']
+        return any(p in fname_lower for p in patterns)
 
     def test_skill(self, dir_path: Path, path_filter=None) -> List[ProbeResult]:
         """扫描技能文件中的提示词注入模式"""
@@ -231,7 +243,10 @@ class PromptInjectionTester:
             except Exception:
                 continue
 
-            # 优化：安全工具文件中跳过规则定义上下文的匹配
+            # 优化：JSON 参考数据文件直接跳过（包含大量恶意技能描述文本）
+            if self._is_json_data_file(fp):
+                continue
+            
             fname_lower = fp.name.lower()
             is_security_tool = any(kw in fname_lower for kw in ['scanner', 'analyzer', 'detector', 'audit', 'security'])
 

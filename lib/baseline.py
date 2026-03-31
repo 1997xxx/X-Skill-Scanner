@@ -10,6 +10,7 @@ Baseline Tracker — Rug-Pull Detection
 - 生成变更报告
 """
 
+import sys
 import hashlib
 import json
 from pathlib import Path
@@ -127,7 +128,7 @@ class BaselineTracker:
 
         self.baselines[skill_name] = asdict(baseline)
         self.save()
-        print(f"📋 基线已创建: {skill_name} ({len(file_hashes)} 个文件)")
+        print(f"📋 基线已创建: {skill_name} ({len(file_hashes)} 个文件)", file=sys.stderr)
         return baseline
 
     def check_changes(self, skill_name: str, skill_path: str) -> Tuple[bool, List[ChangeRecord]]:

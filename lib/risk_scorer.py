@@ -49,6 +49,8 @@ CATEGORY_WEIGHTS = {
     "BASELINE": 20,    # 基线变更 (Rug-Pull)
     "AST": 15,         # AST 分析发现
     "DEPENDENCY": 10,  # 依赖安全问题
+    # v5.0 新增：跨层关联分析
+    "CORRELATION": 35,  # 关联分析发现 - 最高优先级
 }
 
 # 风险因素调整 (v3.2 增强版)
@@ -161,7 +163,12 @@ class RiskScorer:
                 context_modifier *= 1.2
             if context.get("has_credentials"):
                 context_modifier *= 1.3
-        
+            # v5.0: 关联分析加成
+            if context.get("correlation_score"):
+                # 关联分数每10分增加5%的风险加成
+                corr_bonus = 1.0 + (context.get("correlation_score", 0) / 100)
+                context_modifier *= corr_bonus
+
         # 计算最终分数 (上限 100)
         final_score = min(100, int(base_score * context_modifier))
         

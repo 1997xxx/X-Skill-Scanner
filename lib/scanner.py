@@ -1,17 +1,13 @@
 #!/usr/bin/env python3
 """
-X Skill Scanner v3.7.0 - 主扫描器
-十二层防御管线：威胁情报 → 去混淆 → 静态分析 → AST → 依赖检查 → 提示词注入 → 基线比对 → 语义审计 → 熵值分析 → 安装钩子 → 网络行为画像 → 凭证窃取检测
+X Skill Scanner v5.0.0 - 主扫描器
+架构：技能画像 → 自适应扫描 → 误报预过滤 → LLM 二次审查 → 最终裁决
 
 版本演进:
-- v3.0: 去混淆 + AST + 基线追踪 + 依赖检查 + SARIF
-- v3.1: 提示词注入探针 + 语义审计重构
-- v3.2: 威胁情报全面升级 (ClawHavoc/Snyk/SkillJect, 316 恶意技能)
-- v3.3: 熵值分析 + 安装钩子检测 + 网络行为画像
-- v3.4: MurphySec 报告整合 + 攻击手法分析
-- v3.5: 报告格式全面升级 (HTML/MD/Text 统一结构)
-- v3.6: 凭证窃取检测 + CJK 自适应熵值 + 零信任白名单 + 误报调优
-- v3.7: 误报消除引擎 — 规则定义上下文过滤 + 非可执行上下文识别 + typosquat 空名修复
+- v3.x: 逐步叠加 12 层检测引擎（详见 CHANGELOG.md）
+- v4.0: LLM 二次审查引擎 — 规则引擎高召回 + LLM 高精度 = 低误报不漏报
+- v4.1: 技能画像 + 误报预过滤 + 自适应扫描策略 + 跨层关联
+- v5.0: 画像驱动自适应扫描 + LLM 批量审查 + 跨层关联分析 + 风险评分升级
 """
 
 import os
@@ -22,6 +18,7 @@ import argparse
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional
+from dataclasses import asdict
 
 
 def _p(*args, **kwargs):
@@ -62,9 +59,16 @@ from network_profiler import NetworkProfiler
 # v3.6 新增引擎 — 参考 SmartChainArk / 慢雾安全 / 腾讯科恩实验室报告
 from credential_theft_detector import CredentialTheftDetector
 
+# v4.0 新增引擎 — LLM 二次审查
+from llm_reviewer import LLMReviewer
+
+# v4.1 新增引擎 — 技能画像 + 误报预过滤
+from skill_profiler import SkillProfiler
+from fp_filter import FPFilter
+
 
 class SkillScanner:
-    """技能安全扫描器 v3.0 — 七层防御管线"""
+    """技能安全扫描器 v4.0 — 轻量初筛 + LLM 二次审查"""
 
     # ─── 统一风险等级阈值 (与 risk_scorer.py 一致) ──────────────
     RISK_THRESHOLDS = {
@@ -172,6 +176,15 @@ class SkillScanner:
         self.enable_credential_theft_detection = True
         self.credential_theft_detector = CredentialTheftDetector()
 
+        # v4.0 新增引擎 — LLM 二次审查
+        self.enable_llm_review = True   # v4.1: 默认开启
+        self.llm_reviewer = None
+
+        # v4.1 新增引擎 — 技能画像 + 误报预过滤
+        self.skill_profiler = SkillProfiler()
+        self.fp_filter = FPFilter()
+        self._skill_profile = None      # 扫描时填充
+
     # ─── 辅助方法 ───────────────────────────────────────────────
     def _extract_skill_metadata(self, target: Path) -> Dict:
         """从 SKILL.md 或目录结构提取技能元数据"""
@@ -222,7 +235,28 @@ class SkillScanner:
             _p(f"   ⚠️  元数据提取失败: {e}")
         
         return metadata
-    
+
+    def _should_run_engine(self, engine_name: str) -> bool:
+        """根据画像策略决定是否运行某引擎"""
+        if not self._skill_profile:
+            return True
+        strategy = self._skill_profile.scan_strategy
+        if strategy == "quick":
+            return engine_name in {"threat_intel", "static_analysis", "credential_theft"}
+        return True
+
+    def _get_llm_review_threshold(self) -> str:
+        """根据画像策略决定 LLM 审查阈值"""
+        if not self._skill_profile:
+            return "MEDIUM"
+        strategy = self._skill_profile.scan_strategy
+        if strategy == "quick":
+            return "NEVER"
+        elif strategy == "standard":
+            return "MEDIUM"
+        else:
+            return "ALL"
+
     def _detect_campaign_patterns(self, target: Path, files_to_scan: List[Path]) -> List[Dict]:
         """检测已知攻击活动模式 (ClawHavoc/Snyk/ToxicSkills)"""
         findings = []
@@ -336,9 +370,33 @@ class SkillScanner:
             _p("   ℹ️  未匹配白名单，继续扫描")
 
         all_findings: List[Dict] = []
+        static_findings = []  # default, may be set by engine
+
+        # ─── v4.1: 技能画像（先获取基本情况）─────────────────────
+        _p("🔎 步骤 0.5: 技能画像...")
+        try:
+            self._skill_profile = self.skill_profiler.profile(target)
+            # 将威胁情报链接到画像引擎（用于作者信誉检查）
+            if self.threat_intel:
+                self.skill_profiler.set_threat_intel(self.threat_intel)
+                self._skill_profile = self.skill_profiler.profile(target)  # 重新画像
+            
+            profile = self._skill_profile
+            _p(f"   技能: {profile.name} | 作者: {profile.author or '未知'} | "
+               f"类型: {profile.skill_type} | 文件: {profile.file_count}")
+            _p(f"   信任分数: {profile.trust_score}/100 | "
+               f"推荐策略: {profile.scan_strategy} | "
+               f"红旗: {len(profile.risk_fingerprint.get('red_flags', []))}")
+            
+            # 如果信任分数极高且无红旗，可以跳过部分检查
+            if profile.scan_strategy == 'quick' and profile.trust_score >= 80:
+                _p("   ✅ 高信任度技能，启用快速扫描模式")
+        except Exception as e:
+            _p(f"   ⚠️  技能画像失败: {e}，使用标准扫描")
+            self._skill_profile = None
 
         # 1. 威胁情报 (v3.2 - 全面集成 ClawHavoc/Snyk/SkillJect 情报)
-        if self.threat_intel:
+        if self.threat_intel and self._should_run_engine("threat_intel"):
             _p("📊 步骤 1/7: 威胁情报匹配...")
             
             # 提取技能元数据（作者、描述等）
@@ -390,9 +448,13 @@ class SkillScanner:
             # 1c. IOC 域名/IP 扫描 (优化：只扫描可执行文件和配置文件)
             ioc_findings = []
             scan_extensions = {'.py', '.sh', '.js', '.ts', '.bash', '.zsh', '.json', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf'}
+            # v5.0: 跳过扫描器自身的参考数据文件（避免自引用误报）
+            ref_data_names = {'threat_intel.json', '.semantic_cache.json', 'baseline.json',
+                              'whitelist.json', 'malicious_skills.json', 'known_bad.json'}
             files_to_scan = [target] if target.is_file() else [
                 f for f in target.rglob('*') 
-                if f.is_file() and (f.suffix.lower() in scan_extensions or f.name in ['Makefile', 'Dockerfile', '.env'])
+                if f.is_file() and f.name not in ref_data_names
+                   and (f.suffix.lower() in scan_extensions or f.name in ['Makefile', 'Dockerfile', '.env'])
             ]
             
             for file_path in files_to_scan:
@@ -422,7 +484,7 @@ class SkillScanner:
             for file_path in files_to_scan:
                 try:
                     content = file_path.read_text(encoding='utf-8', errors='ignore')
-                    pattern_matches = self.threat_intel.check_code_patterns(content)
+                    pattern_matches = self.threat_intel.check_code_patterns(content, file_path)
                     for pm in pattern_matches:
                         attack_pattern_findings.append({
                             'rule_id': f'THREAT_PATTERN_{pm["pattern_id"].upper()}',
@@ -455,7 +517,7 @@ class SkillScanner:
                 _p("   ⚡ 发现 CRITICAL 威胁情报，跳过后续轻量级检查")
 
         # 2. 去混淆检测 (v3.0 新增)
-        if self.deobfuscator and not target.is_file():
+        if self.deobfuscator and not target.is_file() and self._should_run_engine("deobfuscation"):
             _p("\n📊 步骤 2/7: 去混淆检测...")
             deob_findings = self.deobfuscator.analyze_directory(target, path_filter=self.path_filter)
             for f in deob_findings:
@@ -473,35 +535,38 @@ class SkillScanner:
             _p(f"   发现 {len(deob_findings)} 个混淆问题")
 
         # 3. 静态分析
-        _p("\n📊 步骤 3/7: 静态分析...")
-        if target.is_file():
-            static_findings = self.static_analyzer.analyze_file(target)
-        else:
-            static_findings = self.static_analyzer.analyze_directory(target, recursive=True, path_filter=self.path_filter)
+        if self._should_run_engine("static_analysis"):
+            _p("\n📊 步骤 3/7: 静态分析...")
+            if target.is_file():
+                static_findings = self.static_analyzer.analyze_file(target)
+            else:
+                static_findings = self.static_analyzer.analyze_directory(target, recursive=True, path_filter=self.path_filter)
 
-        for f in static_findings:
-            # 构建增强描述：包含匹配的代码片段
-            desc = f.description
-            evidence = getattr(f, 'evidence', '') or getattr(f, 'matched_text', '')
-            if evidence and evidence not in desc:
-                desc += f"\n\n📋 匹配代码:\n```\n{evidence[:300]}\n```"
-            
-            all_findings.append({
-                'rule_id': getattr(f, 'rule_id', '') or f.category,
-                'severity': f.severity.value if hasattr(f.severity, 'value') else str(f.severity),
-                'category': getattr(f, 'category', 'static'),
-                'title': f.title,
-                'description': desc,
-                'file_path': f.file_path,
-                'line_number': getattr(f, 'line_number', 0),
-                'remediation': f.remediation,
-                'source': 'static_analysis',
-                'code_evidence': evidence[:500] if evidence else '',
-            })
-        _p(f"   发现 {len(static_findings)} 个静态分析问题")
+            for f in static_findings:
+                desc = f.description
+                evidence = getattr(f, 'evidence', '') or getattr(f, 'matched_text', '')
+                if evidence and evidence not in desc:
+                    desc += f"\n\n📋 匹配代码:\n```\n{evidence[:300]}\n```"
+
+                all_findings.append({
+                    'rule_id': getattr(f, 'rule_id', '') or f.category,
+                    'severity': f.severity.value if hasattr(f.severity, 'value') else str(f.severity),
+                    'category': getattr(f, 'category', 'static'),
+                    'title': f.title,
+                    'description': desc,
+                    'file_path': f.file_path,
+                    'line_number': getattr(f, 'line_number', 0),
+                    'remediation': f.remediation,
+                    'source': 'static_analysis',
+                    'code_evidence': evidence[:500] if evidence else '',
+                })
+            _p(f"   发现 {len(static_findings)} 个静态分析问题")
+        else:
+            static_findings = []
+            _p("\n⏭️  跳过静态分析（快速模式）")
 
         # 4. AST 分析 (v3.0 新增)
-        if self.ast_analyzer and not target.is_file():
+        if self.ast_analyzer and not target.is_file() and self._should_run_engine("ast_analysis"):
             _p("\n📊 步骤 4/7: AST 深度分析...")
             ast_findings = self.ast_analyzer.analyze_directory(target, path_filter=self.path_filter)
             for f in ast_findings:
@@ -520,7 +585,7 @@ class SkillScanner:
             _p(f"   发现 {len(ast_findings)} 个 AST 级别问题")
 
         # 5. 依赖安全检查 (v3.0 新增)
-        if self.dep_checker and not target.is_file():
+        if self.dep_checker and not target.is_file() and self._should_run_engine("dependency_check"):
             _p("\n📊 步骤 5/7: 依赖安全检查...")
             dep_findings = self.dep_checker.check_directory(target)
             for f in dep_findings:
@@ -543,7 +608,7 @@ class SkillScanner:
             _p(f"   发现 {len(dep_findings)} 个依赖安全问题")
 
         # 6. 提示词注入测试 (v3.1 新增)
-        if self.prompt_injection_tester and not target.is_file():
+        if self.prompt_injection_tester and not target.is_file() and self._should_run_engine("prompt_injection"):
             _p("\n📊 步骤 6/8: 提示词注入探针扫描...")
             pi_results = self.prompt_injection_tester.test_skill(target, path_filter=self.path_filter)
             for r in pi_results:
@@ -564,7 +629,7 @@ class SkillScanner:
                 _p("   ✅ 未发现提示词注入模式")
 
         # 7. 基线比对 (v3.0 新增)
-        if self.baseline_tracker and not target.is_file():
+        if self.baseline_tracker and not target.is_file() and self._should_run_engine("baseline_change"):
             _p("\n📊 步骤 7/8: 基线比对 (Rug-Pull 检测)...")
             has_changes, changes = self.baseline_tracker.check_changes(target.name, target)
             if has_changes:
@@ -620,7 +685,7 @@ class SkillScanner:
 
         # 8. 语义审计（可选）
         semantic_findings = []
-        if self.enable_semantic:
+        if self.enable_semantic and self._should_run_engine("semantic_audit"):
             _p("\n📊 步骤 8/8: 语义审计...")
             if target.is_file():
                 content = target.read_text(encoding='utf-8')
@@ -672,7 +737,7 @@ class SkillScanner:
         # ─── v3.3 新增引擎 ──────────────────────────────────────
 
         # 9. 熵值分析 (v3.3 新增 — 参考 ClawGuard Auditor)
-        if self.entropy_analyzer and not target.is_file():
+        if self.entropy_analyzer and not target.is_file() and self._should_run_engine("entropy_analysis"):
             _p("\n📊 步骤 9/11: 熵值分析...")
             entropy_findings = self.entropy_analyzer.analyze_directory(target, path_filter=self.path_filter)
             for f in entropy_findings:
@@ -697,7 +762,7 @@ class SkillScanner:
                 _p("   ✅ 熵值分析正常，未发现异常编码区域")
 
         # 10. 安装钩子检测 (v3.3 新增 — 参考 SecureClaw)
-        if self.hook_detector and not target.is_file():
+        if self.hook_detector and not target.is_file() and self._should_run_engine("install_hook"):
             _p("\n📊 步骤 10/11: 安装钩子检测...")
             hook_findings = self.hook_detector.analyze_directory(target, path_filter=self.path_filter)
             for f in hook_findings:
@@ -721,7 +786,7 @@ class SkillScanner:
                 _p("   ✅ 未发现可疑安装钩子")
 
         # 11. 网络行为画像 (v3.3 新增 — 参考 Astrix Security)
-        if self.network_profiler and not target.is_file():
+        if self.network_profiler and not target.is_file() and self._should_run_engine("network_behavior"):
             _p("\n📊 步骤 11/12: 网络行为画像...")
             network_findings = self.network_profiler.analyze_directory(target, path_filter=self.path_filter)
             for f in network_findings:
@@ -742,7 +807,7 @@ class SkillScanner:
                 _p("   ✅ 网络行为正常，无可疑连接")
 
         # ─── 步骤 12: 凭证窃取检测 (v3.6 新增) ─────────────────
-        if self.credential_theft_detector and not target.is_file():
+        if self.credential_theft_detector and not target.is_file() and self._should_run_engine("credential_theft"):
             _p("\n🔐 步骤 12/12: 凭证窃取检测...")
             cred_findings = self.credential_theft_detector.analyze_directory(target, path_filter=self.path_filter)
             for f in cred_findings:
@@ -761,6 +826,83 @@ class SkillScanner:
                 _p(f"   ⚠️  发现 {len(cred_findings)} 个凭证窃取风险")
             else:
                 _p("   ✅ 凭证窃取检测正常")
+
+        # ─── v5.0: 跨层关联分析 ──────────────────────────────
+        correlation_result = None
+        if all_findings:
+            try:
+                from correlation_engine import CorrelationEngine
+                corr_engine = CorrelationEngine()
+                correlation_result = corr_engine.analyze(all_findings)
+
+                for cf in correlation_result.correlation_findings:
+                    all_findings.append({
+                        "rule_id": cf.rule_id,
+                        "severity": cf.severity,
+                        "category": f"correlation_{cf.chain_name}",
+                        "title": cf.title,
+                        "description": cf.description,
+                        "file_path": str(target),
+                        "remediation": "审查完整的攻击链模式",
+                        "source": "correlation_engine",
+                        "metadata": {
+                            "chain_name": cf.chain_name,
+                            "related_count": len(cf.related_findings),
+                        },
+                    })
+
+                if correlation_result.attack_chains:
+                    chain_names = [c.name for c in correlation_result.attack_chains]
+                    _p(f"\n🔗 v5.0 关联分析: 检测到 {len(correlation_result.attack_chains)} 条攻击链: {', '.join(chain_names)}")
+                else:
+                    _p(f"\n🔗 v5.0 关联分析: 未检测到完整攻击链 (关联加成: +{correlation_result.correlation_score})")
+            except ImportError:
+                _p("\n⚠️  关联分析模块不可用，跳过")
+            except Exception as e:
+                _p(f"\n⚠️  关联分析失败: {e}")
+
+        # ─── v4.1: 误报预过滤 + LLM 二次审查 ─────────────────
+        llm_review_summary = None
+        fp_filter_summary = None
+        
+        if all_findings:
+            # 步骤 1: 误报预过滤（快速，不调用 LLM）
+            if self.fp_filter:
+                _p("\n🔍 v4.1 误报预过滤...")
+                kept_findings, filter_results = self.fp_filter.filter_findings(all_findings)
+                fp_filter_summary = self.fp_filter.get_filter_summary(filter_results)
+                
+                fp_count = fp_filter_summary['by_verdict'].get('FP', 0)
+                uncertain_count = fp_filter_summary['by_verdict'].get('UNCERTAIN', 0)
+                tp_count = fp_filter_summary['by_verdict'].get('TP', 0)
+                
+                _p(f"   预过滤: {len(all_findings)} 条发现 → "
+                   f"{fp_count} 误报(已过滤) | {tp_count} 真实威胁 | {uncertain_count} 待LLM审查")
+                
+                all_findings = kept_findings
+            else:
+                _p("\n⚠️  误报预过滤器已禁用，跳过")
+            
+            # 步骤 2: LLM 批量审查（v5.0 — 按文件分组，减少 API 调用）
+            llm_threshold = self._get_llm_review_threshold()
+            if self.enable_llm_review and self.llm_reviewer and all_findings and llm_threshold != "NEVER":
+                _p("\n🤖 v5.0 LLM 批量审查...")
+                try:
+                    filtered_findings, reviews = self.llm_reviewer.filter_findings_batch(
+                        all_findings, str(target), threshold=llm_threshold
+                    )
+                    llm_review_summary = self.llm_reviewer.get_review_summary(reviews)
+
+                    llm_fp = llm_review_summary["by_verdict"].get("FP", 0)
+                    llm_tp = llm_review_summary["by_verdict"].get("TP", 0)
+                    llm_hr = llm_review_summary["by_verdict"].get("HUMAN_REVIEW", 0)
+
+                    _p(f"   LLM批量审查: {len(all_findings)} 条 → "
+                       f"{llm_fp} 误报 | {llm_tp} 真实威胁 | {llm_hr} 需人工审查")
+
+                    all_findings = filtered_findings
+                except Exception as e:
+                    _p(f"   ⚠️  LLM 批量审查失败: {e}，使用预过滤结果")
 
         # ─── 计算风险分数 ──────────────────────────────────────
         risk_score = self._calculate_risk_score(all_findings)
@@ -783,7 +925,7 @@ class SkillScanner:
         result = {
             'target': str(target),
             'scan_time': datetime.now().isoformat(),
-            'scanner_version': '3.7.0',
+            'scanner_version': '5.0.0',
             'total_files': total_files,
             'total_findings': len(all_findings),
             'findings_by_severity': findings_by_severity,
@@ -794,6 +936,14 @@ class SkillScanner:
             'risk_level': risk_level,
             'verdict': verdict,
             'summary': self._generate_summary(all_findings, risk_level),
+            'llm_review': llm_review_summary,
+            'fp_filter': fp_filter_summary,
+            'skill_profile': asdict(self._skill_profile) if self._skill_profile else None,
+            "correlation": {
+                "chains_detected": len(correlation_result.attack_chains) if correlation_result else 0,
+                "correlation_score": correlation_result.correlation_score if correlation_result else 0,
+                "chain_names": [c.name for c in correlation_result.attack_chains] if correlation_result else [],
+            } if correlation_result else None,
         }
 
         _p(f"\n{'=' * 60}")
@@ -1005,7 +1155,10 @@ def main():
     parser.add_argument('--no-baseline', action='store_true', help='跳过基线比对')
     parser.add_argument('--no-deps', action='store_true', help='跳过依赖检查')
     parser.add_argument('--baseline-only', action='store_true', help='仅执行基线比对')
+    parser.add_argument('--no-llm-review', action='store_true', help='禁用 LLM 二次审查（v4.1 默认启用）')
+    parser.add_argument('--no-fp-filter', action='store_true', help='禁用误报预过滤器')
     parser.add_argument('--update-baseline', action='store_true', help='更新基线后退出')
+    parser.add_argument('--profile-only', action='store_true', help='仅输出技能画像后退出')
 
     args = parser.parse_args()
 
@@ -1056,6 +1209,23 @@ def main():
         whitelist_path=args.whitelist,
         enable_whitelist=not args.no_whitelist,
     )
+    
+    # v4.1: LLM 二次审查（默认启用，可用 --no-llm-review 禁用）
+    if not args.no_llm_review:
+        try:
+            scanner.enable_llm_review = True
+            scanner.llm_reviewer = LLMReviewer()
+            _p("🤖 LLM 二次审查已启用（默认）")
+        except Exception as e:
+            _p(f"⚠️  LLM 审查初始化失败: {e}，将跳过 LLM 审查")
+            scanner.enable_llm_review = False
+    else:
+        _p("⚠️  LLM 二次审查已禁用")
+    
+    # v4.1: 误报预过滤器（默认启用）
+    if args.no_fp_filter:
+        scanner.fp_filter = None
+        _p("⚠️  误报预过滤器已禁用")
 
     # 基线专用模式
     if args.baseline_only and scanner.baseline_tracker:
@@ -1077,6 +1247,16 @@ def main():
             result.get('risk_level', 'UNKNOWN'),
             result.get('risk_score', 0),
         )
+        sys.exit(0)
+
+    # v4.1: 画像专用模式
+    if args.profile_only:
+        from skill_profiler import SkillProfiler
+        profiler = SkillProfiler()
+        profile = profiler.profile(Path(target_path))
+        output = json.dumps(asdict(profile), indent=2, ensure_ascii=False)
+        sys.stdout.write(output)
+        sys.stdout.write('\n')
         sys.exit(0)
 
     # 执行扫描

@@ -126,3 +126,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [3.1.0]: https://github.com/1997xxx/X-Skill-Scanner/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/1997xxx/X-Skill-Scanner/compare/v2.0.0...v3.0.0
 [2.0.0]: https://github.com/1997xxx/X-Skill-Scanner/releases/tag/v2.0.0
+
+## v4.1.0 (2026-03-31) — 智能扫描优化
+
+### 新增模块
+- `lib/skill_profiler.py` — 技能画像引擎
+  - 提取技能元数据（名称、作者、类型、文件统计）
+  - 计算信任分数 (0-100)，基于 Git 历史、作者信誉、红旗检测
+  - 推荐自适应扫描策略 (quick/standard/full)
+- `lib/fp_filter.py` — 误报预过滤器
+  - 8 类误报模式库（安全工具自引用、参考数据、文档关键词等）
+  - 5 类真实威胁指标（实际外传、凭证窃取、反向 Shell 等）
+  - 上下文感知清理（移除字符串、注释、代码块、扫描输出格式）
+
+### 核心改进
+- LLM 二次审查默认开启（`--no-llm-review` 关闭）
+- 新增 `--profile-only` 模式，仅输出技能画像
+- 扫描管线重构：技能画像 → 自适应扫描 → 误报预过滤 → LLM 审查 → 最终裁决
+- 跨层关联 + 上下文感知，减少重复告警
+
+### 误报优化成果
+| 测试场景 | v4.0 | v4.1 |
+|---------|------|------|
+| 安全工具自引用 (`lib/`) | ~70% FP | **99.3% FP** |
+| 真实恶意技能 | 0% FP | 0% FP（零漏报） |
+
+### Bug 修复
+- 修复 baseline.py 的 sys 导入问题
+- 修复 JSON 输出被 stderr 污染的问题

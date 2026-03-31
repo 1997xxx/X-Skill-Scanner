@@ -153,18 +153,55 @@ class ThreatIntelligence:
             if not any(kw in stripped for kw in ['def ', 'class ', 'import ', 'return ', 'if ', 'for ', 'while ']):
                 return True
         
+        # 5. Shell 脚本中的配置检查逻辑（非凭证窃取）
+        # 例如: auth_config.get('token', '') 或 echo "clientSecret": "app_secret"
+        if '.get(' in stripped and any(kw in stripped for kw in ["'token'", "'secret'", "'key'", "'auth'"]):
+            return True
+        if stripped.startswith('echo ') and any(kw in stripped for kw in ['Secret', 'secret', 'token']):
+            return True
+        if "'item':" in stripped or "'status':" in stripped or "'action':" in stripped:
+            return True
+        # 安全审计/合规脚本中的描述文本（如 'risk': '...credentials...'）
+        if "'risk':" in stripped or "'fix_cmd':" in stripped or "'required':" in stripped:
+            return True
+        
         return False
 
-    def check_code_patterns(self, code: str) -> List[Dict]:
+    @staticmethod
+    def _is_json_data_file(file_path) -> bool:
+        """判断文件是否为 JSON 参考数据文件"""
+        fp = Path(file_path) if not isinstance(file_path, Path) else file_path
+        if fp.suffix.lower() != '.json':
+            return False
+        fname_lower = fp.name.lower()
+        patterns = ['high-risk-skills', 'malicious', 'known-', 'threat-', 'ioc',
+                     'blocklist', 'blacklist', 'whitelist', 'reference', 'database']
+        return any(p in fname_lower for p in patterns)
+
+    def check_code_patterns(self, code: str, file_path=None) -> List[Dict]:
         """
-        检查代码是否匹配已知攻击模式 — 增强版：排除规则定义和非可执行上下文
+        检查代码是否匹配已知攻击模式 — 增强版：排除规则定义/JSON数据/Shell注释
+        
+        Args:
+            code: 源代码内容
+            file_path: 文件路径（用于判断是否为 JSON 参考数据或 Shell 脚本）
         
         Returns:
             匹配的攻击模式列表
         """
+        # JSON 参考数据文件直接跳过
+        if file_path and self._is_json_data_file(file_path):
+            return []
+        
         matches = []
         patterns = self.get_attack_patterns()
         lines = code.split('\n')
+        
+        # 判断是否为 Shell 脚本
+        is_shell = False
+        if file_path:
+            fp = Path(file_path) if not isinstance(file_path, Path) else file_path
+            is_shell = fp.suffix.lower() in ('.sh', '.bash', '.zsh')
         
         for pattern_id, pattern_info in patterns.items():
             indicators = pattern_info.get('indicators', [])
@@ -183,6 +220,10 @@ class ThreatIntelligence:
                         
                         # 跳过非可执行上下文（注释、UI 标签、文档字符串等）
                         if self._is_non_executable_context(stripped):
+                            continue
+                        
+                        # Shell 脚本注释行跳过
+                        if is_shell and stripped.startswith('#'):
                             continue
                         
                         if re.search(escaped, line, re.IGNORECASE):

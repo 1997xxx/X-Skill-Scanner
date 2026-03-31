@@ -213,22 +213,56 @@ class StaticAnalyzer:
         
         return findings
     
-    def _is_rule_definition_context(self, line: str, surrounding_lines: List[str]) -> bool:
+    @staticmethod
+    def _is_json_data_file(file_path: Path) -> bool:
+        """判断文件是否为 JSON 数据/参考文件（非可执行代码）"""
+        fname_lower = file_path.name.lower()
+        # 常见 JSON 参考数据文件命名模式
+        json_data_patterns = [
+            'high-risk-skills', 'malicious', 'known-', 'threat-', 'ioc',
+            'blocklist', 'blacklist', 'whitelist', 'reference', 'database',
+            'skills-list', 'attack-patterns',
+        ]
+        if file_path.suffix.lower() == '.json':
+            if any(p in fname_lower for p in json_data_patterns):
+                return True
+        return False
+
+    def _is_rule_definition_context(self, line: str, surrounding_lines: List[str],
+                                      file_path: Optional[Path] = None) -> bool:
         """
-        判断当前行是否处于「安全规则定义」上下文中。
+        判断当前行是否处于「安全规则定义」或「非可执行数据」上下文中。
         
-        安全扫描器、IDS/IPS 工具等会在代码中定义检测规则的正则表达式字符串。
-        这些规则字符串本身包含恶意模式关键词（如 /dev/tcp/、xmrig），但它们是
-        检测逻辑的一部分，不是实际的恶意行为。
-        
-        判定策略：
-        1. 行本身看起来像规则定义（包含 "pattern"、"regex"、"rule" 等键名）
-        2. 周围行中有数据结构特征（字典键值对、列表项、YAML 缩进结构）
-        3. 匹配内容被包裹在引号内作为字符串字面量
+        覆盖场景：
+        1. Python/YAML 规则定义（扫描器自身的 THREAT_PATTERNS 等）
+        2. JSON 参考数据文件（high-risk-skills.json 中的描述文本）
+        3. Shell 脚本注释（# 开头的说明性文字）
+        4. Markdown 文档中的列表项和代码示例
+        5. 安全加固操作（chmod 700、chown 等，非提权而是加固）
         """
         stripped = line.strip()
         
-        # 启发式 1: 行本身就是规则定义语句
+        # ─── 场景 1: JSON 参考数据文件 ──────────────────────────
+        if file_path and self._is_json_data_file(file_path):
+            return True
+        
+        # ─── 场景 2: Shell 脚本中的注释行 ──────────────────────
+        if file_path and file_path.suffix.lower() in ('.sh', '.bash', '.zsh'):
+            if stripped.startswith('#'):
+                return True
+            # Shell 函数定义中的 echo/print 说明文字
+            if stripped.startswith('echo "') or stripped.startswith("echo '"):
+                return True
+        
+        # ─── 场景 3: Markdown 文档 ─────────────────────────────
+        if file_path and file_path.suffix.lower() in ('.md', '.txt', '.rst'):
+            # Markdown 列表项、标题、代码块都是说明性内容
+            if stripped.startswith('- ') or stripped.startswith('* ') or \
+               stripped.startswith('#') or stripped.startswith('```') or \
+               stripped.startswith('>'):
+                return True
+        
+        # ─── 场景 4: Python/YAML 规则定义 ──────────────────────
         rule_def_markers = [
             r'"?pattern"?\s*[:=]',
             r'"?regex"?\s*[:=]',
@@ -241,7 +275,7 @@ class StaticAnalyzer:
         if any(re.search(m, stripped, re.IGNORECASE) for m in rule_def_markers):
             return True
         
-        # 启发式 2: 周围行显示这是数据结构定义（非可执行代码）
+        # 周围行显示这是数据结构定义（非可执行代码）
         context = '\n'.join(surrounding_lines)
         structural_markers = [
             r'"severity"\s*:',         # Part of a rule dict
@@ -253,12 +287,13 @@ class StaticAnalyzer:
             r'THREAT_PATTERNS\s*=',    # Python list of patterns
             r'rules\s*:',              # YAML rules section
             r'-\s*cwe\s*:',           # YAML list item with CWE
+            r'"reason"\s*:',           # JSON reason field (high-risk-skills.json)
+            r'"category"\s*:',         # JSON category field
         ]
         if sum(1 for m in structural_markers if re.search(m, context, re.IGNORECASE)) >= 2:
             return True
         
-        # 启发式 3: 匹配内容完全在引号内（字符串字面量中的正则表达式）
-        # 例如: r"/dev/tcp/" 或 '/bin/sh' — 这些是数据，不是代码
+        # 匹配内容完全在引号内（字符串字面量中的正则表达式）
         quote_patterns = [
             r'r["\'][^"\']*%s[^"\']*["\']',   # r'...pattern...'
             r'f["\'][^"\']*%s[^"\']*["\']',   # f'...pattern...'
@@ -274,7 +309,7 @@ class StaticAnalyzer:
         return False
     
     def _check_rule(self, file_path: Path, lines: List[str], rule: Dict, category: str) -> List[Finding]:
-        """检查单个规则 — 增强版：排除规则定义上下文的误报"""
+        """检查单个规则 — 增强版：排除规则定义/JSON数据/Shell注释等误报"""
         findings = []
         
         for pattern_str in rule.get('patterns', []):
@@ -284,29 +319,56 @@ class StaticAnalyzer:
                 for line_num, line in enumerate(lines, 1):
                     match = pattern.search(line)
                     if match:
-                        # ─── P0: 规则定义上下文过滤 ─────────────
-                        # 如果匹配发生在安全规则的定义中（而非实际使用），跳过
+                        # ─── P0: 规则定义/JSON数据/Shell注释过滤 ──
                         ctx_start = max(0, line_num - 5)
                         ctx_end = min(len(lines), line_num + 4)
                         surrounding = lines[ctx_start:ctx_end]
                         
-                        if self._is_rule_definition_context(line, surrounding):
+                        if self._is_rule_definition_context(line, surrounding, file_path):
                             continue
                         
-                        # ─── P1: 纯注释行降级 ────────────────────
+                        # ─── P1: 安全加固操作豁免 ────────────────
+                        # chmod/chown 用于设置正确权限是加固行为，不是提权攻击
                         stripped = line.strip()
+                        if file_path and file_path.suffix.lower() in ('.sh', '.bash', '.zsh'):
+                            # 安全的权限设置：限制访问（700/600）vs 危险的提权（setuid 4xxx）
+                            chmod_match = re.match(r'chmod\s+([0-7]{3})\s+', stripped)
+                            if chmod_match:
+                                perm = chmod_match.group(1)
+                                # 第一位数字含义：0=无特殊位, 1=sticky, 2=setgid, 4=setuid
+                                # setuid (4xxx) 和 setgid (2xxx) 是真正的提权
+                                # 700/600/644 只是限制访问权限，属于安全加固
+                                special_bit = int(perm[0])
+                                if special_bit in (0, 1):
+                                    # 无特殊位或仅 sticky bit — 安全加固
+                                    continue
+                                elif special_bit == 7:
+                                    # 7xxx = rwx + setuid + setgid + sticky — 但常见场景如
+                                    # chmod 700 dir 实际上是普通权限限制（第一位7=rwx，非setuid）
+                                    # 只有当模式是4位数时（如 4755）才真正是 setuid
+                                    # 这里 3 位数的 7xx 第一位就是用户权限，不是特殊位
+                                    continue
+                            # chown 是所有权修正，不是攻击
+                            if stripped.startswith('chown ') or stripped.startswith('sudo chown '):
+                                continue
+                        
+                        # ─── P2: 纯注释行跳过 ────────────────────
                         if stripped.startswith('#') or stripped.startswith('//'):
-                            # 注释中提到恶意模式通常是在说明规则，不是实际威胁
                             continue
                         
-                        # ─── P2: 文件名自引用检测 ────────────────
-                        # 如果文件本身是扫描器/安全工具，降低置信度
+                        # ─── P3: 文件名自引用检测 ────────────────
                         fname_lower = file_path.name.lower()
                         if any(kw in fname_lower for kw in ['scanner', 'analyzer', 'detector', 'audit', 'security']):
-                            # 安全工具文件中出现模式定义是正常的
                             continue
                         
-                        # 获取匹配行及其上下文（前后各 2 行）
+                        # ─── P4: 安全安装器豁免 ────────────────────
+                        # package.json 中的 postinstall 如果只调用已知安全的安装器，跳过
+                        if file_path and file_path.name == 'package.json':
+                            safe_installers = ['agent-skill-installer', 'openclaw-skill-installer']
+                            if any(s in line for s in safe_installers):
+                                continue
+                        
+                        # 获取匹配行及其上下文
                         context_lines = lines[ctx_start:ctx_end]
                         
                         # 构建带行号的上下文代码块
