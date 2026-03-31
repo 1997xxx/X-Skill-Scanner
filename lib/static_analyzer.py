@@ -1,30 +1,30 @@
 #!/usr/bin/env python3
 """
-静态分析引擎
-整合 Aguara 177+ 规则，检测凭证泄露、提示词注入、恶意代码等
+静态分析引擎 v2.0
+整合 Aguara 177+ 规则 + MaliciousAgentSkillsBench + 腾讯科恩 + 慢雾安全
+检测 40+ 攻击模式：间接执行、高级编码、时间炸弹、typosquatting 等
+
+版本 2.0 新增:
+- ✅ P0: 间接执行检测 (getattr, __builtins__, import)
+- ✅ P0: 高级编码检测 (ROT13, zlib, XOR, AST)
+- ✅ P0: 增强 subprocess 检测 (bash -c, python -c, perl -e)
+- ✅ P0: YAML 安全解析 (检测 !!python 指令)
+- ✅ P1: Typosquatting 检测 (Levenshtein 距离)
+- ✅ P1: 时间炸弹模式检测
+- ✅ P1: 环境变量操作检查
+- ✅ P2: MANIFEST.json 完整性验证
 """
 
 import re
 import yaml
+import ast
+import hashlib
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Set
 from dataclasses import dataclass, field
-
-
-@dataclass
-class Finding:
-    """安全发现项"""
-    rule_id: str
-    severity: str
-    category: str
-    title: str
-    description: str
-    file_path: str
-    line_number: int = 0
-    matched_text: str = ""
-    confidence: float = 0.8
-    remediation: str = ""
-    cwe_id: str = ""
+from pathlib import Path
+from models import Finding, Severity, FindingType
+from collections import defaultdict
 
 
 class StaticAnalyzer:
@@ -224,26 +224,44 @@ class StaticAnalyzer:
                 for line_num, line in enumerate(lines, 1):
                     match = pattern.search(line)
                     if match:
+                        # 获取匹配行及其上下文（前后各 2 行）
+                        ctx_start = max(0, line_num - 3)
+                        ctx_end = min(len(lines), line_num + 2)
+                        context_lines = lines[ctx_start:ctx_end]
+                        
+                        # 构建带行号的上下文代码块
+                        context_code = '\n'.join([
+                            f"{ctx_start + i + 1}: {ctx_line}" 
+                            for i, ctx_line in enumerate(context_lines)
+                        ])
+                        
+                        matched_text = match.group(0)[:300]
+                        
                         findings.append(Finding(
-                            rule_id=rule['id'],
-                            severity=rule['severity'],
-                            category=category,
                             title=rule['name'],
-                            description=f"检测到 {rule['name']} 模式",
+                            description=f"检测到 {rule['name']} 模式\n\n📋 匹配代码 (含上下文):\n```\n{context_code}\n```",
                             file_path=str(file_path),
                             line_number=line_num,
-                            matched_text=match.group(0)[:100],
+                            severity=Severity[rule['severity']] if isinstance(rule['severity'], str) else rule['severity'],
+                            finding_type=FindingType.MALICIOUS_PATTERN,
+                            rule_id=rule['id'],
+                            category=category,
+                            matched_text=matched_text,
                             confidence=0.9,
                             remediation=rule.get('remediation', 'N/A'),
-                            cwe_id=rule.get('cwe', '')
+                            cwe_id=rule.get('cwe', ''),
+                            evidence=context_code[:600]
                         ))
             except re.error:
                 continue
         
         return findings
     
-    def analyze_directory(self, dir_path: Path, recursive: bool = True) -> List[Finding]:
+    def analyze_directory(self, dir_path: Path, recursive: bool = True,
+                           path_filter=None) -> List[Finding]:
         """分析目录"""
+        from path_filter import PathFilter as PF
+        pf = path_filter or PF()
         all_findings = []
         
         # 支持的文件扩展名
@@ -255,15 +273,15 @@ class StaticAnalyzer:
             files = dir_path.glob('*')
         
         for file_path in files:
-            if file_path.is_file() and file_path.suffix.lower() in extensions:
-                # 跳过某些目录
-                if any(part.startswith('.') for part in file_path.parts):
-                    continue
-                if any(part in ['node_modules', '__pycache__', '.git'] for part in file_path.parts):
-                    continue
-                
-                findings = self.analyze_file(file_path)
-                all_findings.extend(findings)
+            if not file_path.is_file():
+                continue
+            if file_path.suffix.lower() not in extensions:
+                continue
+            if pf.should_ignore(file_path, dir_path):
+                continue
+            
+            findings = self.analyze_file(file_path)
+            all_findings.extend(findings)
         
         return all_findings
     

@@ -97,7 +97,7 @@ python3 -c "from core.threat_intel import ThreatIntelligence; intel = ThreatInte
 发现新的恶意技能或攻击模式？请提交到：
 
 - GitHub Issues: https://github.com/openclaw/skills/issues
-- 邮件：security@ant-intl.com
+- 邮件：security@x-skill-scanner.com
 
 ### 提交格式
 

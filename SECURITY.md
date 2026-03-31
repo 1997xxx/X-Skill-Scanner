@@ -1,30 +1,40 @@
-# 安全政策
+# Security Policy
 
-## 报告安全漏洞
+## Supported Versions
 
-发现安全漏洞？请联系我们！
+| Version | Supported          |
+| ------- | ------------------ |
+| 3.6.x   | :white_check_mark: |
+| < 3.0   | :x:                |
 
-### 📧 联系方式
+## Reporting a Vulnerability
 
-**邮箱：** security@example.com
+We take security vulnerabilities seriously. If you discover a security issue in this project, please report it responsibly.
 
-### 📋 报告内容
+### 📧 How to Report
 
-请提供：
-1. 漏洞类型和描述
-2. 复现步骤
-3. 影响评估
-4. 修复建议（可选）
+Use [GitHub Security Advisories](https://github.com/1997xxx/x-skill-scanner/security/advisories/new)
 
-### ⏱️ 响应时间
+### 📋 What to Include
 
-- **确认收到：** 1 个工作日
-- **评估报告：** 3 个工作日
-- **修复计划：** 7 个工作日
+Please provide:
+1. **Vulnerability type and description** (e.g., RCE, XSS, path traversal)
+2. **Steps to reproduce** (minimal PoC code if possible)
+3. **Impact assessment** (what can an attacker achieve?)
+4. **Affected versions** 
+5. **Suggested fix** (optional but appreciated)
 
-## 🛡️ 负责任披露
+### ⏱️ Response Timeline
 
-请在公开前给我们修复时间，不要利用漏洞进行测试。
+- **Acknowledgment:** Within 1 business day
+- **Assessment:** Within 3 business days
+- **Fix plan:** Within 7 business days
+- **Public disclosure:** Coordinated after fix release
+
+## 🛡️ Responsible Disclosure
+
+Please give us time to fix the vulnerability before public disclosure. Do not exploit the vulnerability for testing purposes.
 
 ---
-*感谢帮助保护 AI 技能生态系统的安全！** 🛡️
+
+*Thank you for helping protect the AI skill ecosystem!* 🛡️

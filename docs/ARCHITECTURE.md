@@ -81,7 +81,7 @@
 ## 目录结构
 
 ```
-ant-intl-skill-scanner/
+x-skill-scanner/
 ├── scanner.py                  # 主扫描器（入口）
 ├── lib/                        # 核心模块
 │   ├── static_analyzer.py      # 静态分析引擎

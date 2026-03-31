@@ -62,7 +62,7 @@ def pre_install_scan(skill_name: str, temp_dir: Optional[str] = None) -> Tuple[b
         
         print(f"🔍 Scanning: {skill_path}")
         scan_result = subprocess.run(
-            [sys.executable, str(SCANNER_PATH), '-t', str(skill_path), '--semantic', '--json'],
+            [sys.executable, str(SCANNER_PATH), '-t', str(skill_path), '--json'],
             capture_output=True,
             text=True,
             timeout=120
@@ -96,7 +96,7 @@ def pre_install_scan(skill_name: str, temp_dir: Optional[str] = None) -> Tuple[b
             print(f"⚠️  [CAUTION] Risk Level: {risk_level} | Verdict: {verdict}")
             print("\n⚠️  This skill requires manual review before installation.")
             print("    Run the following command to see detailed findings:")
-            print(f"    python3 {SCANNER_PATH} -t {skill_path} --semantic")
+            print(f"    python3 {SCANNER_PATH} -t {skill_path}")
             # 中等风险需要用户确认
             response = input("\nProceed with installation? (y/N): ")
             if response.lower() != 'y':

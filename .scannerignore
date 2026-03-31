@@ -1,0 +1,44 @@
+# .scannerignore — 扫描器自忽略文件
+# 这些文件是扫描器自身的组成部分，包含检测模式而非恶意代码
+# 格式：gitignore 风格 glob
+
+# ─── 规则文件（包含检测模式字符串）─────────────────────
+rules/*.yaml
+rules/*.yml
+
+# ─── 威胁情报数据（包含恶意样本名称和模式）─────────────
+data/threat_intel.json
+
+# ─── 测试目录（故意包含恶意代码用于测试）───────────────
+tests/
+test/
+__tests__/
+
+# ─── 报告目录（上次扫描的输出）─────────────────────────
+reports/
+
+# ─── 临时扫描目录──────────────────────────────────────
+.tmp_scan/
+
+# ─── 文档──────────────────────────────────────────────
+docs/
+*.md
+!SKILL.md
+
+# ─── 扫描器核心引擎（包含检测模式的合法代码）───────────
+lib/deobfuscator.py
+lib/static_analyzer.py
+lib/ast_analyzer.py
+lib/dependency_checker.py
+lib/scanner.py
+lib/path_filter.py
+lib/semantic_auditor.py
+lib/setup_semantic_audit.py
+lib/whitelist.py
+lib/prompt_injection_probes.py
+lib/shield_monitor.py
+hooks/clawhub_hook.py
+scripts/update_threat_intel.py
+scripts/semantic_audit_*.py
+scripts/llm_semantic_audit.py
+scripts/sanitize_for_opensource.sh

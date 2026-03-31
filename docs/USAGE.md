@@ -5,7 +5,7 @@
 ### 1. 安装依赖
 
 ```bash
-cd ant-intl-skill-scanner
+cd x-skill-scanner
 pip3 install -r requirements.txt
 ```
 
@@ -45,7 +45,7 @@ python3 ./scripts/setup_semantic_audit.py
   },
   "skills": {
     "entries": {
-      "ant-intl-skill-scanner": {
+      "x-skill-scanner": {
         "enabled": true,
         "config": {
           "semantic": {
@@ -106,14 +106,14 @@ openclaw gateway restart
 ### 手动扫描
 
 ```bash
-# 基础扫描（静态分析 + 威胁情报）
+# 基础扫描（默认启用语义审计）
 python3 scanner.py -t ./my-skill/
 
-# 完整扫描（+ 语义审计）
-python3 scanner.py -t ./my-skill/ --semantic
+# 快速模式（跳过语义审计）
+python3 scanner.py -t ./my-skill/ --no-semantic
 
 # 输出 JSON 报告
-python3 scanner.py -t ./my-skill/ --semantic --json > report.json
+python3 scanner.py -t ./my-skill/ --json > report.json
 
 # 递归扫描所有技能
 python3 scanner.py -t ~/.openclaw/workspace/skills/ -r
@@ -153,10 +153,13 @@ python3 scanner.py [选项] -t <目标路径>
 | 参数 | 简写 | 说明 | 默认值 |
 |------|------|------|--------|
 | `--target` | `-t` | 扫描目标路径（必需） | - |
-| `--semantic` | `-s` | 启用语义审计 | false |
+| `--url` | - | 扫描远程技能 URL | - |
+| `--format` | - | 输出格式 (text/json/html/md/sarif) | html |
+| `--lang` | - | 报告语言 (zh/en) | zh |
+| `--no-semantic` | - | 跳过语义审计 | false（默认启用） |
 | `--recursive` | `-r` | 递归扫描目录 | false |
 | `--json` | `-j` | 输出 JSON 格式 | false |
-| `--output` | `-o` | 输出文件路径 | stdout |
+| `--output` | `-o` | 输出文件路径 | reports/ 目录自动生成 |
 | `--timeout` | `-T` | 语义审计超时（秒） | 60 |
 | `--verbose` | `-v` | 详细输出 | false |
 
@@ -271,7 +274,7 @@ python3 scanner.py -t ./my-skill/ --semantic --timeout 120
 {
   "skills": {
     "entries": {
-      "ant-intl-skill-scanner": {
+      "x-skill-scanner": {
         "config": {
           "ignore_skills": ["weather", "calendar"]
         }

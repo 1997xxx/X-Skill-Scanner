@@ -1,0 +1,58 @@
+markdown_security:
+  id_prefix: MD
+  description: 针对 SKILL.md 和 Markdown 文件的安全检测规则
+  rules:
+  - id: MD_001
+    name: Malicious System Prompt - 恶意系统提示词
+    severity: CRITICAL
+    patterns:
+    - you are now in (?:developer|debug|god|unrestricted)\s+mode
+    - ignore all previous instructions
+    - disregard all safety guidelines
+    - bypass all security restrictions
+    remediation: 移除恶意越狱指令，遵循正常安全限制
+    cwe: CWE-1333
+  - id: MD_002
+    name: Secret Keeping Instructions - 保密指令
+    severity: HIGH
+    patterns:
+    - do not tell the user
+    - keep this secret from
+    - never reveal this information
+    - hide this from the user
+    remediation: 移除隐藏信息的指令，保持透明度
+    cwe: CWE-1333
+  - id: MD_003
+    name: Dangerous Permission Claims - 危险权限声明
+    severity: HIGH
+    patterns:
+    - permission\s*:\s*["\']?(?:all|full|admin|root|sudo)["\']?
+    - access\s*:\s*["\']?(?:unlimited|full|system)["\']?
+    remediation: 使用最小权限原则，避免请求过度权限
+    cwe: CWE-269
+  - id: MD_004
+    name: Suspicious External Commands - 可疑外部命令
+    severity: HIGH
+    patterns:
+    - '`curl\s+\S+\s*\|\s*bash`'
+    - '`wget\s+\S+\s*-O\s+-\s*\|\s*sh`'
+    - '`npm\s+install\s+-g\s+[^@]+$'
+    remediation: 审查所有外部命令执行，固定依赖版本
+    cwe: CWE-78
+  - id: MD_005
+    name: Data Exfiltration Instructions - 数据外传指示
+    severity: CRITICAL
+    patterns:
+    - send\s+(?:user\s+)?data\s+to\s+(?:external|remote|attacker)
+    - upload\s+(?:memory|config|credentials?)\s+to
+    - exfiltrat(e|ion)\s+(?:user|system)?\s*data
+    remediation: 禁止任何形式的数据外传行为
+    cwe: CWE-532
+  - id: MD_006
+    name: Suspicious Skill Metadata - 可疑技能元数据
+    severity: MEDIUM
+    patterns:
+    - name\s*:\s*["\']?(?:hack|exploit|stealth|ghost|backdoor|rootkit)
+    - description\s*:\s*["\']?.*(?:bypass|exploit|hack|stealth)
+    remediation: 审查技能名称和描述，避免误导性命名
+    cwe: CWE-506

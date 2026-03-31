@@ -1,12 +1,12 @@
 # 贡献指南
 
-感谢你对 Ant International Skill Scanner 的兴趣！
+感谢你对 X Skill Scanner 的兴趣！
 
 ## 🚀 快速开始
 
 ```bash
-git clone https://github.com/your-username/ant-intl-skill-scanner.git
-cd ant-intl-skill-scanner
+git clone https://github.com/your-username/x-skill-scanner.git
+cd x-skill-scanner
 pip3 install -r requirements.txt
 ```
 
@@ -37,4 +37,4 @@ python3 scanner.py -t ./test-skill/ --verbose
 详细文档：[docs/USAGE.md](docs/USAGE.md)
 
 ---
-*Ant International Security Team*
+*X Skill Scanner Team*

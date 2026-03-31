@@ -113,8 +113,8 @@ def allow_llm_task_tool(config):
 
 
 def enable_skill(config):
-    """启用 ant-intl-skill-scanner 技能"""
-    print_separator("步骤 3: 启用 ant-intl-skill-scanner 技能")
+    """启用 x-skill-scanner 技能"""
+    print_separator("步骤 3: 启用 x-skill-scanner 技能")
     
     if 'skills' not in config:
         config['skills'] = {'install': {}, 'entries': {}}
@@ -122,7 +122,7 @@ def enable_skill(config):
     if 'entries' not in config['skills']:
         config['skills']['entries'] = {}
     
-    config['skills']['entries']['ant-intl-skill-scanner'] = {
+    config['skills']['entries']['x-skill-scanner'] = {
         "enabled": True,
         "config": {
             "semantic": {
@@ -135,7 +135,7 @@ def enable_skill(config):
         }
     }
     
-    print(f"✅ ant-intl-skill-scanner 技能已启用")
+    print(f"✅ x-skill-scanner 技能已启用")
     print(f"   语义审计：已启用")
     print(f"   提供者：llm-task")
     
@@ -171,11 +171,11 @@ def verify_config(config):
         print("✅ llm-task 工具已允许")
     
     # 检查技能配置
-    skill = config.get('skills', {}).get('entries', {}).get('ant-intl-skill-scanner')
+    skill = config.get('skills', {}).get('entries', {}).get('x-skill-scanner')
     if not skill or not skill.get('enabled'):
-        errors.append("ant-intl-skill-scanner 技能未启用")
+        errors.append("x-skill-scanner 技能未启用")
     else:
-        print("✅ ant-intl-skill-scanner 技能已启用")
+        print("✅ x-skill-scanner 技能已启用")
     
     if errors:
         print("\n❌ 配置验证失败:")
@@ -203,7 +203,7 @@ def main():
     steps = [
         ("启用 llm-task 插件", enable_llm_task_plugin),
         ("允许 llm-task 工具", allow_llm_task_tool),
-        ("启用 ant-intl-skill-scanner 技能", enable_skill),
+        ("启用 x-skill-scanner 技能", enable_skill),
     ]
     
     for step_name, step_func in steps:
