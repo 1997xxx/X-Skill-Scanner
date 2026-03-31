@@ -1,156 +1,236 @@
-# 架构设计
+# Architecture Design / 架构设计
 
-## 系统架构
+## System Architecture / 系统架构
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
+│  User requests skill installation                           │
 │  用户请求安装技能                                            │
 └─────────────────────┬───────────────────────────────────────┘
                       │
                       ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  1. 来源验证                                                 │
-│  • 来源可信度评估                                            │
-│  • 作者声誉检查                                              │
+│  Layer 1: Threat Intelligence                               │
+│  • 380+ malicious skill name matching                       │
+│  • IOC domain/IP blacklist                                  │
+│  威胁情报匹配 — 恶意技能名 · IOC 域名/IP                     │
 └─────────────────────┬───────────────────────────────────────┘
                       │
                       ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  2. 静态分析                                                 │
-│  • 43 个 TTP 攻击模式检测                                      │
-│  • 194+ 恶意代码规则匹配                                      │
-│  • 危险函数调用检测                                          │
-│  • 凭证泄露模式检测                                          │
+│  Layer 2: Deobfuscation Engine                              │
+│  • Base64/ROT13/Hex/BiDi/Zero-width/TR39/Zlib detection     │
+│  去混淆引擎 — 7 种混淆技术检测                                │
 └─────────────────────┬───────────────────────────────────────┘
                       │
                       ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  3. 威胁情报匹配                                             │
-│  • 573 个恶意技能名称比对                                     │
-│  • 17 个恶意域名黑名单                                        │
-│  • 5 个恶意 IP 黑名单                                          │
+│  Layer 3: Static Analysis                                   │
+│  • 194+ pattern rules (credentials/injection/supply chain)  │
+│  • YAML rule-driven engine                                  │
+│  静态分析 — 194+ 规则 · YAML 驱动                            │
 └─────────────────────┬───────────────────────────────────────┘
                       │
                       ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  4. 语义审计 (可选)                                          │
-│  • LLM 深度分析代码意图                                       │
-│  • 检测隐蔽的恶意行为                                        │
+│  Layer 4: AST Deep Analysis                                 │
+│  • Indirect execution · taint tracking · dynamic imports    │
+│  • Deserialization · shell injection                        │
+│  AST 深度分析 — 间接执行 · Taint 追踪                         │
 └─────────────────────┬───────────────────────────────────────┘
                       │
                       ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  5. 风险评估与报告                                           │
-│  • 风险等级评定 (🟢/🟡/🔴/⛔)                                │
-│  • 生成详细扫描报告                                          │
-│  • 提供安装建议                                              │
+│  Layer 5: Dependency Checker                                │
+│  • requirements.txt / package.json CVE matching             │
+│  依赖检查 — CVE 匹配                                          │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 6: Prompt Injection Probes                           │
+│  • 25+ probes for system override / role hijacking          │
+│  提示词注入探针 — 25+ 探针                                     │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 7: Baseline Tracking                                 │
+│  • SHA-256 fingerprint · rug-pull detection                 │
+│  基线追踪 — SHA-256 指纹 · Rug-Pull 检测                      │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 8: Semantic Audit (optional)                         │
+│  • LLM intent analysis for high-risk files                  │
+│  语义审计 — LLM 意图分析（可选）                                │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 9: Entropy Analysis                                  │
+│  • Shannon entropy · CJK adaptive thresholds                │
+│  熵值分析 — Shannon 熵 · CJK 自适应阈值                        │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 10: Install Hook Detector                            │
+│  • setup.py/cmdclass · postinstall · shell RC · cron        │
+│  安装钩子检测 — setup.py · Shell RC · Cron                    │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 11: Network Behavior Profiler                        │
+│  • Endpoint extraction · IP direct connect · C2 patterns    │
+│  网络行为画像 — 端点提取 · IP 直连 · C2 特征                    │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 12: Credential Theft Detection                       │
+│  • osascript phishing · SSH/AWS keys · browser cookies      │
+│  凭证窃取检测 — osascript · SSH/AWS · 浏览器 Cookie            │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Risk Scoring & Report Generation                           │
+│  • Unified threshold (CRITICAL >= 80)                       │
+│  • Output: text/json/html/md/sarif                          │
+│  风险评分与报告生成                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 核心模块
+## Core Modules / 核心模块
 
-### 1. 静态分析引擎 (`lib/static_analyzer.py`)
-
-- 基于 YAML 规则的模式匹配
-- AST 解析与代码流分析
-- 凭证泄露检测
-- 提示词注入检测
-
-### 2. 威胁情报模块 (`lib/threat_intel.py`)
-
-- 恶意技能名称黑名单
-- 恶意域名/IP 黑名单
-- 已知攻击签名匹配
-
-### 3. 语义审计模块 (`lib/semantic_auditor.py`)
-
-- 使用 OpenClaw llm-task 工具
-- JSON Schema 验证输出
-- 代码意图深度分析
-
-### 4. 报告生成器 (`lib/reporter.py`)
-
-- Markdown/JSON/HTML 格式
-- 风险评分计算
-- 修复建议生成
+| Module | File | Description |
+|--------|------|-------------|
+| Main Scanner | `lib/scanner.py` | Twelve-layer pipeline orchestrator |
+| Static Analyzer | `lib/static_analyzer.py` | YAML rule-driven pattern matching |
+| Threat Intel | `lib/threat_intel.py` + `data/threat_intel.json` | Multi-layer threat intelligence engine |
+| Deobfuscator | `lib/deobfuscator.py` | Seven obfuscation technique detectors |
+| AST Analyzer | `lib/ast_analyzer.py` | Taint tracking + indirect execution |
+| Dependency Checker | `lib/dependency_checker.py` | CVE database matching |
+| Prompt Injection | `lib/prompt_injection_probes.py` | 25+ injection probe patterns |
+| Baseline Tracker | `lib/baseline.py` | SHA-256 fingerprint + rug-pull detection |
+| Semantic Auditor | `lib/semantic_auditor.py` | LLM-based intent analysis |
+| Entropy Analyzer | `lib/entropy_analyzer.py` | Shannon entropy + CJK adaptive thresholds |
+| Install Hook Detector | `lib/install_hook_detector.py` | Post-install malicious behavior detection |
+| Network Profiler | `lib/network_profiler.py` | Network behavior deep analysis |
+| Credential Theft Detector | `lib/credential_theft_detector.py` | osascript/SSH/browser/Keychain theft detection |
+| Risk Scorer | `lib/risk_scorer.py` | Unified risk scoring engine |
+| Reporter | `lib/reporter.py` | Multi-format report generation |
+| Whitelist Manager | `lib/whitelist.py` | Zero-trust whitelist management |
+| Shield Monitor | `lib/shield_monitor.py` | Real-time file change monitoring |
 
 ---
 
-## 目录结构
+## Directory Structure / 目录结构
 
 ```
 x-skill-scanner/
-├── scanner.py                  # 主扫描器（入口）
-├── lib/                        # 核心模块
-│   ├── static_analyzer.py      # 静态分析引擎
-│   ├── threat_intel.py         # 威胁情报匹配
-│   ├── semantic_auditor.py     # 语义审计引擎
-│   └── reporter.py             # 报告生成器
-├── data/                       # 数据文件
-│   └── threat_intel.json       # 威胁情报库
-├── rules/                      # 检测规则
-│   └── static_rules.yaml       # 静态分析规则
-├── scripts/                    # 工具脚本
-│   └── setup_semantic_audit.py # 自动配置
-├── docs/                       # 文档
-│   ├── USAGE.md                # 使用指南
-│   ├── THREAT_INTEL_SOURCES.md # 威胁情报来源
-│   └── ARCHITECTURE.md         # 架构设计（本文件）
-├── README.md                   # 项目说明
-├── SKILL.md                    # OpenClaw 定义
-└── requirements.txt            # Python 依赖
+├── scan                          # CLI entry point (shell wrapper)
+├── lib/                          # Core modules
+│   ├── scanner.py                # Main orchestrator
+│   ├── static_analyzer.py        # Static analysis engine
+│   ├── threat_intel.py           # Threat intelligence engine
+│   ├── deobfuscator.py           # Deobfuscation engine
+│   ├── ast_analyzer.py           # AST deep analysis
+│   ├── dependency_checker.py     # Dependency CVE checker
+│   ├── prompt_injection_probes.py # Prompt injection probes
+│   ├── baseline.py               # Baseline tracking
+│   ├── semantic_auditor.py       # Semantic audit (LLM)
+│   ├── entropy_analyzer.py       # Entropy analysis
+│   ├── install_hook_detector.py  # Install hook detection
+│   ├── network_profiler.py       # Network behavior profiling
+│   ├── credential_theft_detector.py # Credential theft detection
+│   ├── risk_scorer.py            # Risk scoring
+│   ├── reporter.py               # Report generation
+│   ├── whitelist.py              # Whitelist management
+│   └── shield_monitor.py         # Real-time monitoring
+├── data/                         # Data files
+│   └── threat_intel.json         # Threat intelligence database
+├── rules/                        # Detection rules
+│   └── static_rules.yaml         # Static analysis rules
+├── config/                       # Configuration
+│   └── whitelist.json            # Zero-trust whitelist
+├── scripts/                      # Utility scripts
+│   └── update_threat_intel.py    # Threat intel updater
+├── tests/                        # Test suite
+│   ├── test_scanner.py           # Original integration tests
+│   └── test_all_modules.py       # Full module coverage (43 tests)
+├── docs/                         # Documentation
+│   ├── USAGE.md                  # Usage guide
+│   ├── ARCHITECTURE.md           # Architecture design (this file)
+│   └── THREAT_INTEL_SOURCES.md   # Threat intel sources
+├── README.md                     # Project overview
+├── SKILL.md                      # OpenClaw skill definition
+├── CHANGELOG.md                  # Version history
+├── SECURITY.md                   # Security policy
+├── CONTRIBUTING.md               # Contribution guide
+├── pyproject.toml                # Python project config
+├── requirements.txt              # Python dependencies
+├── .gitignore                    # Git ignore rules
+└── LICENSE                       # MIT License
 ```
 
 ---
 
-## 技术栈
+## Technology Stack / 技术栈
 
-- **语言：** Python 3.10+
-- **核心库：** PyYAML, pathlib, json
-- **语义审计：** OpenClaw llm-task
-- **规则引擎：** 自定义 YAML 规则解析
-
----
-
-## 性能指标
-
-| 指标 | 目标 | 实际 |
-|------|------|------|
-| 单次扫描时间 | < 5 秒 | 2-3 秒 |
-| 内存占用 | < 100MB | 50-80MB |
-| 误报率 | < 5% | ~3% |
-| 漏报率 | < 1% | ~0.5% |
+- **Language:** Python 3.9+
+- **Core Libraries:** PyYAML, pathlib, json, re, hashlib, dataclasses
+- **Semantic Audit:** OpenClaw llm-task plugin (optional)
+- **Rule Engine:** Custom YAML rule parser
+- **Testing:** pytest
 
 ---
 
-## 扩展性
+## Performance Targets / 性能指标
 
-### 添加新规则
+| Metric | Target | Actual |
+|--------|--------|--------|
+| Single scan time | < 5 seconds | 2-3 seconds |
+| Memory usage | < 100 MB | 50-80 MB |
+| False positive rate | < 5% | ~3% |
+| False negative rate | < 1% | ~0.5% |
 
-编辑 `rules/static_rules.yaml`：
+---
+
+## Extensibility / 扩展性
+
+### Adding New Rules / 添加新规则
+
+Edit `rules/static_rules.yaml`:
 
 ```yaml
-- id: CRED_006
-  category: credential_leak
-  severity: HIGH
-  pattern: "api_key\\s*=\\s*['\"][a-zA-Z0-9]+"
-  description: "检测到 API Key"
+credential_leak:
+  rules:
+    - id: CRED_006
+      name: Generic API Key
+      severity: HIGH
+      patterns:
+        - "api_key\\s*=\\s*['\"][a-zA-Z0-9]+"
+      remediation: Use environment variables instead of hardcoding
 ```
 
-### 添加威胁情报
+### Adding Threat Intelligence / 添加威胁情报
 
-编辑 `data/threat_intel.json`：
+Edit `data/threat_intel.json`:
 
 ```json
 {
-  "malicious_skills": ["evil-skill-1", "evil-skill-2"],
-  "blacklisted_domains": ["evil.com"],
-  "blacklisted_ips": ["91.92.242.30"]
+  "malicious_skill_names": ["new-malicious-skill"],
+  "malicious_domains": ["evil.com"],
+  "malicious_ips": ["91.92.242.30"]
 }
 ```
 
 ---
 
-*最后更新：2026-03-20*
+*Last updated: 2026-03-31*

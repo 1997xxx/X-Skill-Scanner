@@ -1,23 +1,21 @@
-# 使用指南
+# Usage Guide / 使用指南
 
-## 🚀 快速开始
+## Quick Start / 快速开始
 
-### 1. 安装依赖
-
-```bash
-cd x-skill-scanner
-pip3 install -r requirements.txt
-```
-
-### 2. 配置 OpenClaw
-
-运行自动配置脚本：
+### 1. Install Dependencies / 安装依赖
 
 ```bash
-python3 ./scripts/setup_semantic_audit.py
+cd X-Skill-Scanner
+pip install -r requirements.txt
 ```
 
-或手动编辑 `~/.openclaw/openclaw.json`：
+### 2. Configure Semantic Audit (Optional) / 配置语义审计（可选）
+
+Semantic audit uses OpenClaw's LLM task plugin for deep intent analysis. It is optional and only triggers for high-risk files.
+
+语义审计使用 OpenClaw 的 LLM 任务插件进行深度意图分析，为可选功能，仅对高风险文件触发。
+
+Edit `~/.openclaw/openclaw.json` to enable the `llm-task` plugin:
 
 ```json
 {
@@ -33,16 +31,6 @@ python3 ./scripts/setup_semantic_audit.py
       }
     }
   },
-  "agents": {
-    "list": [
-      {
-        "id": "main",
-        "tools": {
-          "allow": ["llm-task"]
-        }
-      }
-    ]
-  },
   "skills": {
     "entries": {
       "x-skill-scanner": {
@@ -51,9 +39,7 @@ python3 ./scripts/setup_semantic_audit.py
           "semantic": {
             "enabled": true,
             "provider": "llm-task",
-            "timeout_ms": 60000,
-            "max_tokens": 1500,
-            "thinking": "low"
+            "timeout_ms": 60000
           }
         }
       }
@@ -62,9 +48,7 @@ python3 ./scripts/setup_semantic_audit.py
 }
 ```
 
-> **注意：** 将 `<your-provider>` 和 `<your-model>` 替换为你的配置。
-
-### 3. 重启 Gateway
+Then restart the gateway:
 
 ```bash
 openclaw gateway restart
@@ -72,114 +56,87 @@ openclaw gateway restart
 
 ---
 
-## 📖 使用方式
+## Usage Modes / 使用方式
 
-### 自动扫描（推荐）
+### Automatic Scan on Skill Install / 安装时自动扫描
 
-配置后，安装技能时自动触发安全检查。
+When configured in OpenClaw, the scanner automatically triggers during skill installation:
 
-### 会话触发扫描
+在 OpenClaw 中配置后，安装技能时会自动触发安全检查：
 
-**当用户在会话中提及"skill 安装"相关命令时，Agent 会自动：**
+1. **Detect install intent** — Keywords: "install skill", "clawhub install", etc.
+2. **Run security scan** — Automatically executes `./scan -t <skill-path>`
+3. **Show results** — Displays risk level and findings
+4. **Allow or block** — Proceeds with install only if scan passes
 
-1. **检测安装意图** - 识别关键词（安装 skill, install skill 等）
-2. **提示安全扫描** - 告知用户需要先扫描
-3. **执行扫描** - 自动运行 `./scan -t <skill-path>`
-4. **显示结果** - 展示风险等级和结论
-5. **允许安装** - 扫描通过后才继续安装
-
-**触发关键词：**
-- 中文：安装 skill、安装技能、下载技能、添加技能
-- 英文：install skill, skill install, add skill, download skill
-- 命令：clawhub install, aone-kit skill install, AIWay install
-
-**多路径监控：** 自动监控以下所有技能安装位置：
-
-- `~/.openclaw/skills/` - OpenClaw 标准路径
-- `~/.openclaw/workspace/skills/` - Workspace 路径
-- `~/.openclaw/workspace/.claude/skills/` - Claude 风格路径
-- `~/.claude/skills/` - 用户 Claude 路径
-- `./.claude/skills/` - 当前工作区路径
-- `~/.aone/skills/` - Aone-kit 路径
-- `~/.aiway/skills/` - AIWay 路径
-
-### 手动扫描
+### Manual Scan / 手动扫描
 
 ```bash
-# 基础扫描（默认启用语义审计）
-python3 scanner.py -t ./my-skill/
+# Full scan (all 12 layers, semantic audit enabled by default)
+./scan -t ./my-skill/
 
-# 快速模式（跳过语义审计）
-python3 scanner.py -t ./my-skill/ --no-semantic
+# Quick mode (skip LLM semantic audit)
+./scan -t ./my-skill/ --no-semantic
 
-# 输出 JSON 报告
-python3 scanner.py -t ./my-skill/ --json > report.json
+# JSON output
+./scan -t ./my-skill/ --json > report.json
 
-# 递归扫描所有技能
-python3 scanner.py -t ~/.openclaw/workspace/skills/ -r
+# HTML report
+./scan -t ./my-skill/ --format html -o report.html
+
+# SARIF output (GitHub Security Tab)
+./scan -t ./my-skill/ --format sarif -o results.sarif
+
+# Recursive scan (multiple skills in directory)
+python3 lib/scanner.py -t ~/.openclaw/skills/ -r
 ```
 
-### 变更检测
+### Remote URL Scan / 远程 URL 扫描
 
 ```bash
-# 检查所有监控路径的技能变化
-bash check-skills-change.sh
-
-# 强制重新创建快照
-bash check-skills-change.sh --force
+./scan --url https://github.com/user/repo
 ```
-
-### 风险等级
-
-| 等级 | 标识 | 含义 | 建议 |
-|------|------|------|------|
-| **LOW** | 🟢 | 无风险 | 可安全安装 |
-| **MEDIUM** | 🟡 | 中等风险 | 人工审查后决定 |
-| **HIGH** | 🔴 | 高风险 | 需人工批准 |
-| **EXTREME** | ⛔ | 极高风险 | 禁止安装 |
 
 ---
 
-## 🔧 CLI 参考
+## CLI Reference / 命令行参考
 
-### 基本用法
+### Basic Usage / 基本用法
 
 ```bash
-python3 scanner.py [选项] -t <目标路径>
+python3 lib/scanner.py [options] -t <target-path>
 ```
 
-### 参数说明
+### Parameters / 参数说明
 
-| 参数 | 简写 | 说明 | 默认值 |
-|------|------|------|--------|
-| `--target` | `-t` | 扫描目标路径（必需） | - |
-| `--url` | - | 扫描远程技能 URL | - |
-| `--format` | - | 输出格式 (text/json/html/md/sarif) | html |
-| `--lang` | - | 报告语言 (zh/en) | zh |
-| `--no-semantic` | - | 跳过语义审计 | false（默认启用） |
-| `--recursive` | `-r` | 递归扫描目录 | false |
-| `--json` | `-j` | 输出 JSON 格式 | false |
-| `--output` | `-o` | 输出文件路径 | reports/ 目录自动生成 |
-| `--timeout` | `-T` | 语义审计超时（秒） | 60 |
-| `--verbose` | `-v` | 详细输出 | false |
+| Parameter | Short | Description | Default |
+|-----------|-------|-------------|---------|
+| `--target` | `-t` | Target path (required) | - |
+| `--url` | - | Remote skill URL | - |
+| `--format` | - | Output format (text/json/html/md/sarif) | html |
+| `--no-semantic` | - | Skip semantic audit | false |
+| `--recursive` | `-r` | Recursive directory scan | false |
+| `--json` | `-j` | JSON output | false |
+| `--output` | `-o` | Output file path | auto-generated in reports/ |
+| `--verbose` | `-v` | Verbose output | false |
 
 ---
 
-## 🐍 Python API
+## Python API
 
-### 导入模块
+### Import
 
 ```python
-from scanner import SkillScanner, ScanConfig
+from lib.scanner import SkillScanner, ScanConfig
 ```
 
-### 创建扫描器
+### Create Scanner
 
 ```python
-# 默认配置
+# Default configuration
 scanner = SkillScanner()
 
-# 自定义配置
+# Custom configuration
 config = ScanConfig(
     enable_semantic=True,
     enable_threat_intel=True,
@@ -189,40 +146,40 @@ config = ScanConfig(
 scanner = SkillScanner(config=config)
 ```
 
-### 执行扫描
+### Execute Scan
 
 ```python
-# 扫描单个技能
+# Scan single skill
 result = scanner.scan("./my-skill/")
 
-# 扫描目录（递归）
+# Scan directory (recursive)
 results = scanner.scan_directory("./skills/", recursive=True)
 ```
 
-### 解析结果
+### Parse Results
 
 ```python
-print(f"风险等级：{result.risk_level}")
-print(f"风险分数：{result.risk_score}")
-print(f"发现项：{result.total_findings}")
+print(f"Risk Level: {result['risk_level']}")
+print(f"Risk Score: {result['risk_score']}")
+print(f"Total Findings: {len(result['findings'])}")
 
-# 获取详细发现
-for finding in result.findings:
-    print(f"- [{finding.severity}] {finding.title}")
-    print(f"  文件：{finding.file_path}:{finding.line_number}")
-    print(f"  修复：{finding.remediation}")
+for finding in result['findings']:
+    print(f"- [{finding['severity']}] {finding['title']}")
+    print(f"  File: {finding['file_path']}:{finding['line_number']}")
+    print(f"  Remediation: {finding['remediation']}")
 ```
 
 ---
 
-## 📊 扫描结果结构
+## Scan Result Structure / 扫描结果结构
 
 ```json
 {
   "target": "./my-skill/",
-  "scan_time": "2026-03-20T10:00:00Z",
+  "scan_time": "2026-03-31T10:00:00Z",
   "total_files": 5,
-  "total_findings": 3,
+  "scanned_files": 5,
+  "skipped_files": 0,
   "findings_by_severity": {
     "CRITICAL": 0,
     "HIGH": 1,
@@ -237,10 +194,10 @@ for finding in result.findings:
       "rule_id": "CRED_005",
       "severity": "HIGH",
       "category": "credential_leak",
-      "title": "数据库连接串",
+      "title": "Database connection string",
       "file_path": "./my-skill/config.py",
       "line_number": 15,
-      "remediation": "使用环境变量或配置文件"
+      "remediation: "Use environment variables instead of hardcoding"
     }
   ]
 }
@@ -248,53 +205,44 @@ for finding in result.findings:
 
 ---
 
-## ❓ 故障排查
+## Troubleshooting / 故障排查
 
-### Q: 语义审计失败？
+### Q: Semantic audit fails? / 语义审计失败？
 
-检查 `llm-task` 插件是否启用：
+Check if the `llm-task` plugin is enabled:
 
 ```bash
 openclaw config get plugins.entries.llm-task.enabled
 ```
 
-### Q: 扫描超时？
+### Q: Scan timeout? / 扫描超时？
 
-增加超时时间：
+Increase the timeout:
 
 ```bash
-python3 scanner.py -t ./my-skill/ --semantic --timeout 120
+./scan -t ./my-skill/ --timeout 120
 ```
 
-### Q: 误报？
+### Q: False positive? / 误报？
 
-在配置中添加信任技能：
+Submit feedback via GitHub Issues with the scan output and explanation.
 
-```json
-{
-  "skills": {
-    "entries": {
-      "x-skill-scanner": {
-        "config": {
-          "ignore_skills": ["weather", "calendar"]
-        }
-      }
-    }
-  }
-}
-```
+通过 GitHub Issues 提交误报反馈，附上扫描输出和说明。
 
-### Q: 威胁情报库更新？
+### Q: Update threat intelligence? / 更新威胁情报？
+
+The threat intelligence database uses manual maintenance. Edit `data/threat_intel.json` to add new threats.
 
 威胁情报库采用手工维护模式，编辑 `data/threat_intel.json` 添加新威胁。
 
 ---
 
-## 📚 参考文档
+## References / 参考文档
 
-- [威胁情报来源](THREAT_INTEL_SOURCES.md)
-- [架构设计](ARCHITECTURE.md)
+- [Architecture Design](ARCHITECTURE.md)
+- [Threat Intel Sources](THREAT_INTEL_SOURCES.md)
 - [SKILL.md](../SKILL.md)
 
 ---
-*最后更新：2026-03-20*
+
+*Last updated: 2026-03-31*

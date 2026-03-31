@@ -1,40 +1,43 @@
-# 贡献指南
+# Contributing Guide / 贡献指南
+
+Thank you for your interest in X Skill Scanner!
 
 感谢你对 X Skill Scanner 的兴趣！
 
-## 🚀 快速开始
+## Quick Start / 快速开始
 
 ```bash
-git clone https://github.com/your-username/x-skill-scanner.git
-cd x-skill-scanner
-pip3 install -r requirements.txt
+git clone https://github.com/1997xxx/X-Skill-Scanner.git
+cd X-Skill-Scanner
+pip install -r requirements.txt
 ```
 
-## 📝 贡献类型
+## Contribution Types / 贡献类型
 
-- ✅ 修复 Bug
-- ✅ 添加新检测规则
-- ✅ 优化性能
-- ✅ 改进文档
-- ✅ 报告恶意样本
+- Bug fixes / 修复 Bug
+- New detection rules / 添加新检测规则
+- Performance improvements / 优化性能
+- Documentation improvements / 改进文档
+- Report malicious samples / 报告恶意样本
 
-## 🔧 添加检测规则
+## Adding Detection Rules / 添加检测规则
 
-编辑 `rules/static_rules.yaml`，添加新规则后提交 PR。
+Edit `rules/static_rules.yaml` to add new rules, then submit a PR.
 
-## 🧪 测试
+编辑 `rules/static_rules.yaml` 添加新规则后提交 PR。
+
+## Testing / 测试
 
 ```bash
-python3 scanner.py -t ./test-skill/ --verbose
+python3 -m pytest tests/ -v
 ```
 
-## 📋 PR 指南
+## PR Guidelines / PR 指南
 
-- 使用清晰的提交信息
-- 添加测试用例
-- 更新相关文档
-
-详细文档：[docs/USAGE.md](docs/USAGE.md)
+- Use clear commit messages / 使用清晰的提交信息
+- Add test cases for new features / 为新功能添加测试用例
+- Update relevant documentation / 更新相关文档
 
 ---
+
 *X Skill Scanner Team*
