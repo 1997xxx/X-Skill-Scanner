@@ -16,7 +16,7 @@ v3.7 优化：规则定义上下文过滤，避免安全工具自扫误报
 
 import re
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
 
@@ -125,6 +125,7 @@ class CredentialTheftDetector:
     5. 凭证外传组合模式（读取 + 上传）
     
     v3.7 优化: _is_rule_definition_line() 过滤安全工具中的规则定义字符串
+    v5.1 优化: Markdown fenced code block / YAML frontmatter / 教学示例精确过滤
     """
 
     def __init__(self):
@@ -155,6 +156,67 @@ class CredentialTheftDetector:
                      'blocklist', 'blacklist', 'whitelist', 'reference', 'database']
         return any(p in fname_lower for p in patterns)
 
+    @staticmethod
+    def _find_md_code_block_ranges(lines: List[str]) -> List[Tuple[int, int]]:
+        """扫描 Markdown 文件，找出所有 fenced code block 的行范围（0-based, inclusive）"""
+        ranges = []
+        in_block = False
+        block_start = -1
+        fence_pattern = re.compile(r'^(`{3,}|~{3,})')
+        
+        for i, line in enumerate(lines):
+            m = fence_pattern.match(line.strip())
+            if m:
+                fence_char = m.group(1)[0]
+                fence_len = len(m.group(1))
+                if not in_block:
+                    in_block = True
+                    block_start = i
+                else:
+                    if line.strip().startswith(fence_char * min(fence_len, 3)):
+                        ranges.append((block_start, i))
+                        in_block = False
+                        block_start = -1
+        return ranges
+
+    @staticmethod
+    def _in_md_code_block(line_idx: int, blocks: List[Tuple[int, int]]) -> bool:
+        """精确判断某行是否在 fenced code block 内部"""
+        for start, end in blocks:
+            if start < line_idx < end:
+                return True
+        return False
+
+    @staticmethod
+    def _is_yaml_frontmatter_range(lines: List[str]) -> Tuple[int, int]:
+        """检测 YAML frontmatter 范围"""
+        if lines and lines[0].strip() == '---':
+            for i in range(1, min(len(lines), 100)):
+                if lines[i].strip() == '---':
+                    return (0, i)
+        return (-1, -1)
+
+    @staticmethod
+    def _in_yaml_frontmatter(line_idx: int, fm: Tuple[int, int]) -> bool:
+        """判断某行是否在 YAML frontmatter 内部"""
+        s, e = fm
+        if s >= 0:
+            return s <= line_idx <= e
+        return False
+
+    @staticmethod
+    def _has_teaching_marker_preceding(lines_around: List[str], mid_offset: int) -> bool:
+        """检查匹配行之前的行是否有 ❌ BAD / ✅ GOOD 等教学标记"""
+        preceding = '\n'.join(lines_around[:mid_offset])
+        teaching_markers = [
+            r'❌\s*(?:BAD|INSECURE|VULNERABLE|WRONG)',
+            r'✅\s*(?:GOOD|SECURE|SAFE|CORRECT|BEST)',
+            r'🚫\s*',
+            r'//\s*❌',
+            r'#\s*❌',
+        ]
+        return any(re.search(m, preceding, re.IGNORECASE) for m in teaching_markers)
+
     def analyze_directory(self, dir_path: Path, recursive: bool = True,
                            path_filter=None) -> List[CredentialFinding]:
         """分析目录中所有文件的凭证窃取行为"""
@@ -175,33 +237,59 @@ class CredentialTheftDetector:
         return all_findings
 
     def _analyze_file(self, file_path: Path) -> List[CredentialFinding]:
-        """分析单个文件"""
+        """分析单个文件 — 预计算代码块范围，精确过滤误报"""
         try:
             content = file_path.read_text(encoding='utf-8', errors='ignore')
         except Exception:
             return []
         
-        # 优化：JSON 参考数据文件（如 high-risk-skills.json）直接跳过
+        # 优化：JSON 参考数据文件直接跳过
         if self._is_json_data_file(file_path):
             return []
+        
+        lines = content.split('\n')
+        is_md = file_path.suffix.lower() in ('.md', '.txt', '.rst')
+        
+        # ⭐ 预计算 Markdown 结构信息
+        md_code_blocks: List[Tuple[int, int]] = []
+        fm_range: Tuple[int, int] = (-1, -1)
+        if is_md:
+            md_code_blocks = self._find_md_code_block_ranges(lines)
+            fm_range = self._is_yaml_frontmatter_range(lines)
         
         fname_lower = file_path.name.lower()
         is_security_tool = any(kw in fname_lower for kw in ['scanner', 'analyzer', 'detector', 'audit', 'security'])
         is_shell_script = file_path.suffix.lower() in ('.sh', '.bash', '.zsh')
         
         findings = []
-        findings.extend(self._check_osascript(content, file_path, is_security_tool, is_shell_script))
-        findings.extend(self._check_sensitive_paths(content, file_path, is_security_tool, is_shell_script))
-        findings.extend(self._check_browser_theft(content, file_path, is_security_tool, is_shell_script))
-        findings.extend(self._check_keychain(content, file_path, is_security_tool, is_shell_script))
-        findings.extend(self._check_exfil_combinations(content, file_path, is_security_tool, is_shell_script))
+        findings.extend(self._check_osascript(content, file_path, is_security_tool, is_shell_script,
+                                               md_code_blocks, fm_range, lines))
+        findings.extend(self._check_sensitive_paths(content, file_path, is_security_tool, is_shell_script,
+                                                     md_code_blocks, fm_range, lines))
+        findings.extend(self._check_browser_theft(content, file_path, is_security_tool, is_shell_script,
+                                                   md_code_blocks, fm_range, lines))
+        findings.extend(self._check_keychain(content, file_path, is_security_tool, is_shell_script,
+                                              md_code_blocks, fm_range, lines))
+        findings.extend(self._check_exfil_combinations(content, file_path, is_security_tool, is_shell_script,
+                                                        md_code_blocks, fm_range, lines))
         self.findings.extend(findings)
         return findings
 
-    def _check_osascript(self, content, file_path, is_sec, is_shell=False):
+    def _check_osascript(self, content, file_path, is_sec, is_shell=False,
+                          md_blocks=None, fm=None, full_lines=None):
         findings = []
+        md_blocks = md_blocks or []
+        fm = fm or (-1, -1)
+        is_md = file_path.suffix.lower() in ('.md', '.txt', '.rst')
         for pattern, severity, rule_id, title, desc in OSASCRIPT_PASSWORD_DIALOG_PATTERNS:
             for line_num, line in enumerate(content.split('\n'), 1):
+                idx = line_num - 1
+                # ⭐ Markdown code block 过滤
+                if is_md and self._in_md_code_block(idx, md_blocks):
+                    continue
+                # ⭐ YAML frontmatter 过滤
+                if is_md and self._in_yaml_frontmatter(idx, fm):
+                    continue
                 if is_sec and self._is_rule_definition_line(line):
                     continue
                 if is_shell and line.strip().startswith('#'):
@@ -215,11 +303,21 @@ class CredentialTheftDetector:
                         remediation='立即移除 osascript 密码弹窗代码。'))
         return findings
 
-    def _check_sensitive_paths(self, content, file_path, is_sec, is_shell=False):
+    def _check_sensitive_paths(self, content, file_path, is_sec, is_shell=False,
+                                md_blocks=None, fm=None, full_lines=None):
         findings = []
         is_doc = file_path.suffix.lower() in ('.md', '.txt')
+        md_blocks = md_blocks or []
+        fm = fm or (-1, -1)
         for pattern, severity, rule_id, title in SENSITIVE_FILE_PATHS:
             for line_num, line in enumerate(content.split('\n'), 1):
+                idx = line_num - 1
+                # ⭐ Markdown code block 过滤
+                if is_doc and self._in_md_code_block(idx, md_blocks):
+                    continue
+                # ⭐ YAML frontmatter 过滤
+                if is_doc and self._in_yaml_frontmatter(idx, fm):
+                    continue
                 if is_sec and self._is_rule_definition_line(line):
                     continue
                 if is_shell and line.strip().startswith('#'):
@@ -244,10 +342,19 @@ class CredentialTheftDetector:
                         remediation='审查对该敏感文件的访问意图。'))
         return findings
 
-    def _check_browser_theft(self, content, file_path, is_sec, is_shell=False):
+    def _check_browser_theft(self, content, file_path, is_sec, is_shell=False,
+                              md_blocks=None, fm=None, full_lines=None):
         findings = []
+        md_blocks = md_blocks or []
+        fm = fm or (-1, -1)
+        is_md = file_path.suffix.lower() in ('.md', '.txt', '.rst')
         for pattern, severity, rule_id, title in BROWSER_THEFT_PATTERNS:
             for line_num, line in enumerate(content.split('\n'), 1):
+                idx = line_num - 1
+                if is_md and self._in_md_code_block(idx, md_blocks):
+                    continue
+                if is_md and self._in_yaml_frontmatter(idx, fm):
+                    continue
                 if is_sec and self._is_rule_definition_line(line):
                     continue
                 if is_shell and line.strip().startswith('#'):
@@ -261,10 +368,19 @@ class CredentialTheftDetector:
                         remediation='审查浏览器数据访问的真实目的。'))
         return findings
 
-    def _check_keychain(self, content, file_path, is_sec, is_shell=False):
+    def _check_keychain(self, content, file_path, is_sec, is_shell=False,
+                         md_blocks=None, fm=None, full_lines=None):
         findings = []
+        md_blocks = md_blocks or []
+        fm = fm or (-1, -1)
+        is_md = file_path.suffix.lower() in ('.md', '.txt', '.rst')
         for pattern, severity, rule_id, title in KEYCHAIN_PATTERNS:
             for line_num, line in enumerate(content.split('\n'), 1):
+                idx = line_num - 1
+                if is_md and self._in_md_code_block(idx, md_blocks):
+                    continue
+                if is_md and self._in_yaml_frontmatter(idx, fm):
+                    continue
                 if is_sec and self._is_rule_definition_line(line):
                     continue
                 if is_shell and line.strip().startswith('#'):
@@ -278,10 +394,21 @@ class CredentialTheftDetector:
                         remediation='审查 Keychain 访问的必要性。'))
         return findings
 
-    def _check_exfil_combinations(self, content, file_path, is_sec, is_shell=False):
+    def _check_exfil_combinations(self, content, file_path, is_sec, is_shell=False,
+                                   md_blocks=None, fm=None, full_lines=None):
         findings = []
+        md_blocks = md_blocks or []
+        fm = fm or (-1, -1)
+        is_md = file_path.suffix.lower() in ('.md', '.txt', '.rst')
         for pattern, severity, rule_id, title, desc in EXFIL_COMBINATION_PATTERNS:
             for line_num, line in enumerate(content.split('\n'), 1):
+                idx = line_num - 1
+                # ⭐ Markdown code block 过滤
+                if is_md and self._in_md_code_block(idx, md_blocks):
+                    continue
+                # ⭐ YAML frontmatter 过滤
+                if is_md and self._in_yaml_frontmatter(idx, fm):
+                    continue
                 if is_sec and self._is_rule_definition_line(line):
                     continue
                 if is_shell and line.strip().startswith('#'):

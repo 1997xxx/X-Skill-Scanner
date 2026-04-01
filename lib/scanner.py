@@ -1155,7 +1155,7 @@ def main():
     parser.add_argument('--no-baseline', action='store_true', help='跳过基线比对')
     parser.add_argument('--no-deps', action='store_true', help='跳过依赖检查')
     parser.add_argument('--baseline-only', action='store_true', help='仅执行基线比对')
-    parser.add_argument('--no-llm-review.*v5.0 默认启用）')
+    parser.add_argument('--no-llm-review', action='store_true', help='跳过 LLM 审查（v5.0 默认启用）')
     parser.add_argument('--no-fp-filter', action='store_true', help='禁用误报预过滤器')
     parser.add_argument('--update-baseline', action='store_true', help='更新基线后退出')
     parser.add_argument('--profile-only', action='store_true', help='仅输出技能画像后退出')

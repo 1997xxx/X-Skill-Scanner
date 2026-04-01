@@ -193,7 +193,7 @@ class StaticAnalyzer:
         }
     
     def analyze_file(self, file_path: Path) -> List[Finding]:
-        """分析单个文件"""
+        """分析单个文件 — 预计算代码块范围，精确过滤误报"""
         findings = []
         
         try:
@@ -203,12 +203,22 @@ class StaticAnalyzer:
         
         lines = content.split('\n')
         
+        # ⭐ 预计算 Markdown fenced code block 范围和 YAML frontmatter
+        md_code_blocks: List[Tuple[int, int]] = []
+        fm_range: Tuple[int, int] = (-1, -1)
+        if file_path.suffix.lower() in ('.md', '.txt', '.rst'):
+            md_code_blocks = self._find_markdown_code_block_ranges(lines)
+            fm_range = self._is_yaml_frontmatter_range(lines)
+        
         # 遍历所有规则类别
         for category, category_data in self.rules.items():
             id_prefix = category_data.get('id_prefix', 'UNK')
             
             for rule in category_data.get('rules', []):
-                rule_findings = self._check_rule(file_path, lines, rule, category)
+                rule_findings = self._check_rule(
+                    file_path, lines, rule, category,
+                    md_code_blocks=md_code_blocks, fm_range=fm_range
+                )
                 findings.extend(rule_findings)
         
         return findings
@@ -228,6 +238,47 @@ class StaticAnalyzer:
                 return True
         return False
 
+    @staticmethod
+    def _find_markdown_code_block_ranges(lines: List[str]) -> List[Tuple[int, int]]:
+        """
+        扫描 Markdown 文件，找出所有 fenced code block 的行范围。
+        
+        支持 ``` 和 ~~~ 语法，以及带语言标识的代码块（```typescript）。
+        返回 [(start_line_0idx, end_line_0idx), ...]，包含开闭边界。
+        """
+        ranges = []
+        in_block = False
+        block_start = -1
+        fence_pattern = re.compile(r'^(`{3,}|~{3,})')
+        
+        for i, line in enumerate(lines):
+            m = fence_pattern.match(line.strip())
+            if m:
+                fence_char = m.group(1)[0]
+                fence_len = len(m.group(1))
+                if not in_block:
+                    in_block = True
+                    block_start = i
+                else:
+                    # 检查闭合 fence 是否与开启 fence 使用相同字符且长度足够
+                    if line.strip().startswith(fence_char * min(fence_len, 3)):
+                        ranges.append((block_start, i))
+                        in_block = False
+                        block_start = -1
+        return ranges
+
+    @staticmethod
+    def _is_yaml_frontmatter_range(lines: List[str]) -> Tuple[int, int]:
+        """
+        检测 YAML frontmatter 范围（--- 开头到下一个 ---）。
+        返回 (start, end) 或 (-1, -1)。
+        """
+        if lines and lines[0].strip() == '---':
+            for i in range(1, min(len(lines), 100)):  # frontmatter 通常 < 100 行
+                if lines[i].strip() == '---':
+                    return (0, i)
+        return (-1, -1)
+
     def _is_rule_definition_context(self, line: str, surrounding_lines: List[str],
                                       file_path: Optional[Path] = None) -> bool:
         """
@@ -239,6 +290,9 @@ class StaticAnalyzer:
         3. Shell 脚本注释（# 开头的说明性文字）
         4. Markdown 文档中的列表项和代码示例
         5. 安全加固操作（chmod 700、chown 等，非提权而是加固）
+        6. ⭐ NEW: Markdown fenced code block 内部（``` 或 ~~~）
+        7. ⭐ NEW: YAML frontmatter 元数据区域
+        8. ⭐ NEW: Markdown 中的 ❌/✅ 标记的教学示例
         """
         stripped = line.strip()
         
@@ -254,12 +308,66 @@ class StaticAnalyzer:
             if stripped.startswith('echo "') or stripped.startswith("echo '"):
                 return True
         
-        # ─── 场景 3: Markdown 文档 ─────────────────────────────
+        # ─── 场景 3-8: Markdown 文档 ───────────────────────────
         if file_path and file_path.suffix.lower() in ('.md', '.txt', '.rst'):
-            # Markdown 列表项、标题、代码块都是说明性内容
+            # 3a. 列表项、标题、引用块
             if stripped.startswith('- ') or stripped.startswith('* ') or \
-               stripped.startswith('#') or stripped.startswith('```') or \
-               stripped.startswith('>'):
+               stripped.startswith('+ ') or stripped.startswith('>'):
+                return True
+            
+            # 3b. 自身就是 fence 分隔符
+            if stripped.startswith('```') or stripped.startswith('~~~'):
+                return True
+            
+            # ⭐ 场景 6: 检查是否在 fenced code block 内部
+            # 需要查看整个文件的代码块范围（通过 surrounding_lines 推断）
+            # 如果周围行中包含未配对的 fence 开启标记，说明我们在代码块内
+            ctx_text = '\n'.join(surrounding_lines)
+            fence_opens = len(re.findall(r'^(`{3,}|~{3,})\w*\s*$', ctx_text, re.MULTILINE))
+            # 简单启发：如果上文有 fence 开启但没有关闭，当前行在代码块内
+            # 更精确的做法是传入完整文件信息，这里用局部上下文近似
+            has_open_fence = bool(re.search(r'^(`{3,}|~{3,})\w*\s*$', ctx_text, re.MULTILINE))
+            if has_open_fence:
+                # 统计从 surrounding_lines 开头到当前行的 fence 配对情况
+                open_count = 0
+                for sl in surrounding_lines:
+                    fm = re.match(r'^(`{3,}|~{3,})', sl.strip())
+                    if fm:
+                        open_count += 1
+                # 奇数个 fence = 当前在代码块内
+                if open_count % 2 == 1:
+                    return True
+            
+            # ⭐ 场景 8: Markdown 教学示例标记
+            # ❌ BAD / ✅ GOOD / ✅ BEST 后面的代码都是教学示例，不是真实恶意代码
+            # 检查当前行之前的几行是否有这些标记
+            preceding = '\n'.join(surrounding_lines[:len(surrounding_lines)//2])
+            teaching_markers = [
+                r'❌\s*(?:BAD|INSECURE|VULNERABLE|WRONG)',
+                r'✅\s*(?:GOOD|SECURE|SAFE|CORRECT|BEST)',
+                r'🚫\s*',
+                r'//\s*❌',
+                r'#\s*❌',
+                r'<!\-\-\s*❌',
+            ]
+            if any(re.search(m, preceding, re.IGNORECASE) for m in teaching_markers):
+                return True
+            
+            # ⭐ 场景 7: YAML frontmatter 内部
+            # 如果文件开头有 --- 分隔符，frontmatter 内的内容都是元数据
+            if surrounding_lines and surrounding_lines[0].strip() == '---':
+                # 检查是否已经遇到第二个 ---
+                seen_closing = False
+                for sl in surrounding_lines:
+                    if sl.strip() == '---':
+                        if seen_closing:
+                            break
+                        seen_closing = True
+                if not seen_closing:
+                    return True
+            
+            # 通用 Markdown 结构元素
+            if stripped.startswith('#') or stripped.startswith('|'):
                 return True
         
         # ─── 场景 4: Python/YAML 规则定义 ──────────────────────
@@ -308,9 +416,30 @@ class StaticAnalyzer:
         
         return False
     
-    def _check_rule(self, file_path: Path, lines: List[str], rule: Dict, category: str) -> List[Finding]:
-        """检查单个规则 — 增强版：排除规则定义/JSON数据/Shell注释等误报"""
+    @staticmethod
+    def _in_md_code_block(line_idx_0based: int, code_blocks: List[Tuple[int, int]]) -> bool:
+        """精确判断某行是否在 Markdown fenced code block 内部"""
+        for start, end in code_blocks:
+            if start < line_idx_0based < end:
+                return True
+        return False
+
+    @staticmethod
+    def _in_yaml_frontmatter(line_idx_0based: int, fm_range: Tuple[int, int]) -> bool:
+        """判断某行是否在 YAML frontmatter 内部"""
+        start, end = fm_range
+        if start >= 0:
+            return start <= line_idx_0based <= end
+        return False
+
+    def _check_rule(self, file_path: Path, lines: List[str], rule: Dict, category: str,
+                     md_code_blocks: Optional[List[Tuple[int, int]]] = None,
+                     fm_range: Optional[Tuple[int, int]] = None) -> List[Finding]:
+        """检查单个规则 — 增强版：精确过滤 Markdown 代码块/frontmatter/规则定义等误报"""
         findings = []
+        md_code_blocks = md_code_blocks or []
+        fm_range = fm_range or (-1, -1)
+        is_md = file_path and file_path.suffix.lower() in ('.md', '.txt', '.rst')
         
         for pattern_str in rule.get('patterns', []):
             try:
@@ -319,6 +448,16 @@ class StaticAnalyzer:
                 for line_num, line in enumerate(lines, 1):
                     match = pattern.search(line)
                     if match:
+                        line_idx = line_num - 1  # 0-based
+                        
+                        # ─── ⭐ NEW: Markdown fenced code block 精确过滤 ──
+                        if is_md and md_code_blocks and self._in_md_code_block(line_idx, md_code_blocks):
+                            continue
+                        
+                        # ─── ⭐ NEW: YAML frontmatter 元数据过滤 ──
+                        if is_md and self._in_yaml_frontmatter(line_idx, fm_range):
+                            continue
+                        
                         # ─── P0: 规则定义/JSON数据/Shell注释过滤 ──
                         ctx_start = max(0, line_num - 5)
                         ctx_end = min(len(lines), line_num + 4)
