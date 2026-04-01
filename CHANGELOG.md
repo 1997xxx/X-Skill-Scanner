@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.1.0] - 2026-04-01
+
+### Added
+- **Ethics & Compliance Framework** — Six principles: authorization-first, defensive use, responsible disclosure, privacy protection, data minimization, auditability
+- Professional ethics section positioned before Guardrails in SKILL.md
+
+### Changed
+- **Project hygiene cleanup** — Removed redundant files from skill directory:
+  - `.DS_Store` (macOS metadata across root/reports/tmp/)
+  - `rules/static_rules.yaml.bak` (backup file)
+  - `.skills-snapshot-multi.txt` (runtime state mixed into source)
+  - `.pytest_cache/` (test cache)
+  - `tmp/test-comprehensive/`, `tmp/gen_threat_intel.py`, `tmp/linkedin-job-application/` (stale test artifacts)
+- Version synchronization across all modules: `pyproject.toml`, `lib/__init__.py`, `lib/scanner.py`, `README.md`, `SKILL.md` → v5.1.0
+
+### Fixed
+- Cleaned up stale `.DS_Store` and test artifacts that were incorrectly tracked in git
+
 ## [3.6.0] - 2026-03-30
 
 ### Added

@@ -925,7 +925,7 @@ class SkillScanner:
         result = {
             'target': str(target),
             'scan_time': datetime.now().isoformat(),
-            'scanner_version': '5.0.0',
+            'scanner_version': '5.1.0',
             'total_files': total_files,
             'total_findings': len(all_findings),
             'findings_by_severity': findings_by_severity,

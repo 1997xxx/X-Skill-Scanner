@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-v5.0.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v5.1.0-blue.svg)](CHANGELOG.md)
 
 ---
 
@@ -204,4 +204,4 @@ MIT License
 
 **X Skill Scanner Team** — Your AI skill security guardian 🛡️
 
-*Version: v5.0.0 | Updated: 2026-03-31*
+*Version: v5.1.0 | Updated: 2026-04-01*

@@ -344,6 +344,23 @@ python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py --url <skill-url>
 
 ---
 
+## 伦理与合规 / Ethics & Compliance
+
+本工具用于防御性安全审计，仅限授权场景使用。
+
+This tool is designed for defensive security auditing and authorized use only.
+
+| 原则 / Principle | 说明 / Description |
+|-----------------|-------------------|
+| **授权优先** | 仅扫描已获得明确授权的技能和目标 / Only scan skills and targets with explicit authorization |
+| **防御用途** | 扫描结果用于修复和加固，不用于攻击目的 / Results are for remediation and hardening, not exploitation |
+| **负责任披露** | 发现真实威胁时，建议通过适当渠道负责任地披露 / When real threats are found, recommend responsible disclosure through appropriate channels |
+| **隐私保护** | 不泄露被扫描技能的私有信息（凭证、内部 URL、配置细节）到外部 / Do not leak private information from scanned skills (credentials, internal URLs, config details) externally |
+| **数据最小化** | 扫描报告仅保留必要的安全发现，不收集无关数据 / Reports retain only necessary security findings; no extraneous data collection |
+| **可审计性** | 所有扫描操作留有记录，便于事后审查和追溯 / All scan operations are logged for post-hoc review and traceability |
+
+---
+
 ## 安全边界 / Guardrails
 
 - 不要在向用户展示的输出中暴露 API 密钥或令牌。
