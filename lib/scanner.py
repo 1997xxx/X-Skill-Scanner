@@ -245,17 +245,34 @@ class SkillScanner:
             return engine_name in {"threat_intel", "static_analysis", "credential_theft"}
         return True
 
-    def _get_llm_review_threshold(self) -> str:
-        """根据画像策略决定 LLM 审查阈值"""
+    def _has_critical_or_high_findings(self, findings: list) -> bool:
+        """检查是否存在 CRITICAL 或 HIGH 级别的发现"""
+        for f in findings:
+            sev = f.get('severity', '') if isinstance(f, dict) else getattr(f, 'severity', '')
+            if sev in ('CRITICAL', 'HIGH'):
+                return True
+        return False
+
+    def _get_llm_review_threshold(self, findings: list = None) -> str:
+        """根据画像策略 + 实际发现严重度决定 LLM 审查阈值
+        
+        安全原则：即使 quick 策略，发现 CRITICAL/HIGH 问题时也必须触发 LLM 审查。
+        防止高信任度伪装包（如恶意安全工具）绕过深度检测。
+        """
         if not self._skill_profile:
             return "MEDIUM"
+        
         strategy = self._skill_profile.scan_strategy
-        if strategy == "quick":
-            return "NEVER"
-        elif strategy == "standard":
+        base_threshold = {
+            "quick": "NEVER",
+            "standard": "MEDIUM",
+        }.get(strategy, "ALL")
+        
+        # 安全覆盖：存在 CRITICAL/HIGH 发现时，强制升级为 MEDIUM 阈值
+        if base_threshold == "NEVER" and findings and self._has_critical_or_high_findings(findings):
             return "MEDIUM"
-        else:
-            return "ALL"
+        
+        return base_threshold
 
     def _detect_campaign_patterns(self, target: Path, files_to_scan: List[Path]) -> List[Dict]:
         """检测已知攻击活动模式 (ClawHavoc/Snyk/ToxicSkills)"""
@@ -884,7 +901,7 @@ class SkillScanner:
                 _p("\n⚠️  误报预过滤器已禁用，跳过")
             
             # 步骤 2: LLM 批量审查（v5.0 — 按文件分组，减少 API 调用）
-            llm_threshold = self._get_llm_review_threshold()
+            llm_threshold = self._get_llm_review_threshold(all_findings)
             if self.enable_llm_review and self.llm_reviewer and all_findings and llm_threshold != "NEVER":
                 _p("\n🤖 v5.0 LLM 批量审查...")
                 try:

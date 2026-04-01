@@ -180,6 +180,8 @@ class ReportGenerator:
             'install_hook_detection': ('🔧 安装钩子', 'Install Hooks'),
             'network_profiling': ('🌐 网络画像', 'Network Profiling'),
             'threat_intel': ('🛡️ 威胁情报', 'Threat Intel'),
+            'credential_theft_detection': ('🔐 凭证窃取检测', 'Credential Theft'),
+            'correlation_engine': ('🔗 关联分析', 'Correlation Engine'),
             'dependency_check': ('📦 依赖检查', 'Dependencies'),
             'prompt_injection_test': ('💉 注入探针', 'Injection Test'),
             'baseline_check': ('📋 基线比对', 'Baseline Check'),
@@ -187,7 +189,9 @@ class ReportGenerator:
         
         layer_order = ['deobfuscation', 'static_analysis', 'ast_analysis', 
                        'semantic_audit', 'entropy_analysis', 
-                       'install_hook_detection', 'network_profiling']
+                       'install_hook_detection', 'network_profiling',
+                       'threat_intel', 'credential_theft_detection', 
+                       'correlation_engine']
         
         for src_key in layer_order:
             label_cn, label_en = layer_labels.get(src_key, (src_key, src_key))
@@ -637,10 +641,13 @@ td{padding:8px 10px;border-bottom:1px solid #eee;vertical-align:top;overflow-wra
             'install_hook_detection': ('&#x1F527; 安装钩子','Install Hooks'),
             'network_profiling': ('&#x1F310; 网络画像','Network Profiling'),
             'threat_intel': ('&#x1F6E1;&#xFE0F; 威胁情报','Threat Intel'),
+            'credential_theft_detection': ('&#x1F510; 凭证窃取检测','Credential Theft'),
+            'correlation_engine': ('&#x1F517; 关联分析','Correlation Engine'),
         }
         
         layer_order = ['deobfuscation','static_analysis','ast_analysis','semantic_audit',
-                       'entropy_analysis','install_hook_detection','network_profiling']
+                       'entropy_analysis','install_hook_detection','network_profiling',
+                       'threat_intel','credential_theft_detection','correlation_engine']
         
         html += '<h2>&#x1F4CA; 各层检测结果 / Layer-by-Layer Results</h2>\n'
         html += '<table>\n<tr><th>防御层 / Layer</th><th>结果 / Result</th></tr>\n'
@@ -754,10 +761,14 @@ td{padding:8px 10px;border-bottom:1px solid #eee;vertical-align:top;overflow-wra
             'entropy_analysis': '📊 熵值分析 / Entropy Analysis',
             'install_hook_detection': '🔧 安装钩子 / Install Hooks',
             'network_profiling': '🌐 网络画像 / Network Profiling',
+            'threat_intel': '🛡️ 威胁情报 / Threat Intel',
+            'credential_theft_detection': '🔐 凭证窃取检测 / Credential Theft',
+            'correlation_engine': '🔗 关联分析 / Correlation Engine',
         }
         
         layer_order = ['deobfuscation','static_analysis','ast_analysis','semantic_audit',
-                       'entropy_analysis','install_hook_detection','network_profiling']
+                       'entropy_analysis','install_hook_detection','network_profiling',
+                       'threat_intel','credential_theft_detection','correlation_engine']
         
         source_map = r.get('findings_by_source',{})
         lines.append('### 各层检测结果 / Layer-by-Layer Results')

@@ -150,8 +150,31 @@ class LLMReviewer:
         self.model = model or os.environ.get('SCANNER_REVIEW_MODEL', None)
         self._client = None
 
+    def _get_default_model_ref(self, cfg: dict) -> tuple:
+        """从 OpenClaw 配置中提取默认模型的 provider_id 和 model_id
+        
+        返回 (provider_id, model_id) 或 (None, None)
+        """
+        try:
+            agents = cfg.get('agents', {})
+            defaults = agents.get('defaults', {})
+            primary_ref = defaults.get('model', {}).get('primary', '')
+            
+            if '/' in primary_ref:
+                prov_id, model_id = primary_ref.split('/', 1)
+                return prov_id, model_id
+        except Exception:
+            pass
+        return None, None
+
     def _get_provider_config(self) -> Dict[str, str]:
-        """复用语义审计的 Provider 自动发现逻辑"""
+        """获取 LLM Provider 配置
+        
+        优先级：
+        1. 环境变量 OPENAI_BASE_URL + OPENAI_API_KEY
+        2. OpenClaw 默认模型对应的 provider（agents.defaults.model.primary）
+        3. 遍历所有 provider，取第一个能探测通的
+        """
         # 优先使用环境变量
         if os.environ.get('OPENAI_BASE_URL') and os.environ.get('OPENAI_API_KEY'):
             return {
@@ -161,7 +184,7 @@ class LLMReviewer:
                 'type': 'openai-chat',
             }
         
-        # 从 openclaw.json 自动发现（与 semantic_auditor 相同逻辑）
+        # 从 openclaw.json 自动发现
         try:
             config_path = Path.home() / '.openclaw' / 'openclaw.json'
             if not config_path.exists():
@@ -171,6 +194,36 @@ class LLMReviewer:
                 cfg = json.load(f)
             
             providers = cfg.get('models', {}).get('providers', {})
+            
+            # ─── 策略 1: 优先使用 OpenClaw 默认模型对应的 provider ─────
+            default_prov_id, default_model_id = self._get_default_model_ref(cfg)
+            
+            if default_prov_id and default_prov_id in providers:
+                prov_cfg = providers[default_prov_id]
+                api_key = prov_cfg.get('apiKey')
+                base_url = prov_cfg.get('baseUrl')
+                models_list = prov_cfg.get('models', [])
+                
+                if api_key and base_url and models_list:
+                    # 如果用户指定了 model 且不在该 provider 的模型列表中，用第一个
+                    model_id = self.model or default_model_id
+                    available_ids = [m.get('id', '') for m in models_list]
+                    if model_id not in available_ids and available_ids:
+                        model_id = available_ids[0]
+                    
+                    detected = self._probe_api(base_url, api_key, model_id)
+                    if detected:
+                        return detected
+                    
+                    # 探测失败时 fallback
+                    return {
+                        'url': base_url,
+                        'key': api_key,
+                        'model': model_id,
+                        'type': 'openai-chat',
+                    }
+            
+            # ─── 策略 2: 遍历所有 provider，取第一个能探测通的 ─────
             for prov_id, prov_cfg in providers.items():
                 api_key = prov_cfg.get('apiKey')
                 base_url = prov_cfg.get('baseUrl')
@@ -179,7 +232,6 @@ class LLMReviewer:
                 if api_key and base_url and models_list:
                     model_id = self.model or models_list[0].get('id', '')
                     
-                    # 探测正确的 API 类型和 URL
                     detected = self._probe_api(base_url, api_key, model_id)
                     if detected:
                         return detected
@@ -197,21 +249,36 @@ class LLMReviewer:
         raise RuntimeError("无法找到 LLM Provider 配置。请设置 OPENAI_BASE_URL 和 OPENAI_API_KEY 环境变量，或确保 openclaw.json 配置正确。")
 
     def _probe_api(self, base_url: str, api_key: str, model_id: str) -> Optional[Dict]:
-        """探测可用的 API 端点"""
+        """探测可用的 API 端点
+        
+        不仅检查 HTTP 200，还验证响应体是有效的 OpenAI 兼容 JSON（包含 choices 字段）。
+        防止 HTML 跳转页、网关错误页面等被误判为成功。
+        """
         import urllib.request
         import urllib.error
         
         base = base_url.rstrip('/')
         candidates = []
         
-        if '/api/' in base:
+        # 策略 1: baseUrl 已包含 /v1 路径 → 直接追加 /chat/completions
+        # e.g., https://host/api/openai/v1 → https://host/api/openai/v1/chat/completions
+        if '/v1' in base and not base.endswith('/chat/completions'):
+            candidates.append(f'{base}/chat/completions')
+        
+        # 策略 2: baseUrl 包含 /api/ 但不是 v1 风格 → 截断到根 + /v1/chat/completions
+        # e.g., https://host/api/anthropic → https://host/v1/chat/completions
+        if '/api/' in base and '/v1' not in base:
             root = base[:base.index('/api/')]
             candidates.append(f'{root}/v1/chat/completions')
         
+        # 策略 3: 标准模式 — baseUrl 后追加 /v1/chat/completions
         if not base.endswith('/v1/chat/completions'):
             candidates.append(f'{base}/v1/chat/completions')
+        
+        # 策略 4: 尝试原始 baseUrl（可能已经是完整端点）
         candidates.append(base)
         
+        # 去重保序
         seen = set()
         unique = []
         for c in candidates:
@@ -238,13 +305,23 @@ class LLMReviewer:
                 )
                 
                 with urllib.request.urlopen(req, timeout=10) as resp:
-                    if resp.status == 200:
+                    if resp.status != 200:
+                        continue
+                    
+                    # 验证响应体是有效的 OpenAI 兼容 JSON
+                    raw = resp.read().decode('utf-8', errors='ignore')
+                    body = json.loads(raw)
+                    
+                    if isinstance(body, dict) and 'choices' in body:
                         return {
                             'url': url,
                             'key': api_key,
                             'model': model_id,
                             'type': 'openai-chat',
                         }
+            except (json.JSONDecodeError, KeyError, TypeError):
+                # 响应不是有效 JSON 或缺少 choices 字段 → 跳过
+                continue
             except Exception:
                 continue
         
