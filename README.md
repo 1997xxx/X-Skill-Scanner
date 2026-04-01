@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-v5.1.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v5.2.0-blue.svg)](CHANGELOG.md)
 
 ---
 
@@ -118,15 +118,18 @@ Or configure in `~/.openclaw/openclaw.json` — the scanner auto-discovers provi
 ### CLI Options / 命令行选项
 
 ```
--t TARGET          Target skill directory or file
---no-semantic      Skip LLM semantic audit
---no-llm-review    Skip LLM secondary review
---no-fp-filter     Skip false positive pre-filter
---format FORMAT    Output format: text (default), html, json, md, sarif
--o OUTPUT          Output file path
---whitelist FILE   Custom whitelist JSON
---threat-intel FILE Custom threat intel JSON
---path-filter PATTERN  Path exclusion regex
+-t TARGET             目标技能目录或文件 / Target skill directory or file
+--no-semantic         跳过 LLM 语义审计 / Skip LLM semantic audit
+--no-llm-review       跳过 LLM 二次审查 / Skip LLM secondary review
+--no-fp-filter        跳过误报预过滤器 / Skip false positive pre-filter
+--format FORMAT       输出格式：text(默认)/html/json/md/sarif / Output format
+-o OUTPUT             输出文件路径 / Output file path
+--whitelist FILE      自定义白名单 JSON / Custom whitelist JSON
+--threat-intel FILE   自定义威胁情报 JSON / Custom threat intel JSON
+--path-filter PATTERN 路径排除正则 / Path exclusion regex
+--install             扫描后询问是否安装 / Prompt to install after scan
+--no-prompt           跳过安装询问（CI/自动化）/ Skip install prompt (CI/automation)
+--install-to PATH     指定安装目录 / Specify install directory
 ```
 
 ---
@@ -204,4 +207,4 @@ MIT License
 
 **X Skill Scanner Team** — Your AI skill security guardian 🛡️
 
-*Version: v5.1.0 | Updated: 2026-04-01*
+*Version: v5.2.0 | Updated: 2026-04-01*

@@ -275,6 +275,24 @@ class CredentialTheftDetector:
         self.findings.extend(findings)
         return findings
 
+    def _build_cred_description(self, desc: str, line: str, line_num: int, 
+                                  context_lines: list = None) -> str:
+        """构建结构化的凭证窃取描述"""
+        parts = [desc]
+        parts.append(f'\n📁 文件位置: 第 {line_num} 行')
+        
+        # 提取匹配的关键词
+        kw_patterns = ['.env', 'password', 'secret', 'token', 'key', 'credential',
+                       'ssh', 'private_key', 'api_key', 'access_token']
+        matched_kws = [kw for kw in kw_patterns if kw.lower() in line.lower()]
+        if matched_kws:
+            parts.append(f'🎯 敏感关键词: {", ".join(matched_kws)}')
+        
+        parts.append(f'\n📋 可疑代码:')
+        parts.append(f'  {line.strip()[:200]}')
+        
+        return '\n'.join(parts)
+
     def _check_osascript(self, content, file_path, is_sec, is_shell=False,
                           md_blocks=None, fm=None, full_lines=None):
         findings = []
@@ -295,12 +313,17 @@ class CredentialTheftDetector:
                 if is_shell and line.strip().startswith('#'):
                     continue
                 if re.search(pattern, line, re.IGNORECASE):
+                    desc_text = (f'{desc}'
+                                 f'\n\n⚠️  潜在影响: 通过伪造系统对话框诱导用户输入 macOS 登录密码，'
+                                 f'攻击者可获取系统级访问权限。'
+                                 f'\n\n📋 可疑代码 (第 {line_num} 行):'
+                                 f'\n  {line.strip()[:200]}')
                     findings.append(CredentialFinding(
                         rule_id=rule_id, title=title, severity=severity,
-                        description=f'{desc}\n\n📋 可疑代码 (第 {line_num} 行):\n```\n{line.strip()[:300]}\n```',
+                        description=desc_text,
                         file_path=str(file_path), line_number=line_num,
                         category='osascript_password_dialog', confidence=0.95,
-                        remediation='立即移除 osascript 密码弹窗代码。'))
+                        remediation='立即移除 osascript 密码弹窗代码。这是 Nova Stealer 等恶意软件使用的钓鱼技术。'))
         return findings
 
     def _check_sensitive_paths(self, content, file_path, is_sec, is_shell=False,
@@ -309,6 +332,18 @@ class CredentialTheftDetector:
         is_doc = file_path.suffix.lower() in ('.md', '.txt')
         md_blocks = md_blocks or []
         fm = fm or (-1, -1)
+        
+        # 敏感路径的影响说明映射
+        path_impact_map = {
+            '.env': '该文件通常包含 API 密钥、数据库密码等敏感凭证，读取后可能被发送到外部服务器。',
+            'ssh': 'SSH 私钥是系统身份认证的核心凭证，泄露后可被用于未授权的远程登录。',
+            'private_key': '私钥文件一旦泄露，攻击者可冒充用户身份进行加密通信或签名操作。',
+            'keychain': 'macOS Keychain 存储了用户的网站密码、WiFi 密码、证书等敏感信息。',
+            'password': '密码相关文件或变量可能包含明文或弱加密的用户凭证。',
+            'token': 'Token 通常用于 API 认证和会话管理，泄露可导致账户接管。',
+            'credential': '凭据文件可能包含用户名/密码对或其他认证信息。',
+        }
+        
         for pattern, severity, rule_id, title in SENSITIVE_FILE_PATHS:
             for line_num, line in enumerate(content.split('\n'), 1):
                 idx = line_num - 1
@@ -333,13 +368,26 @@ class CredentialTheftDetector:
                 if re.search(pattern, line, re.IGNORECASE):
                     if is_doc and severity == 'MEDIUM':
                         continue
+                    
+                    # 构建影响说明
+                    impact = '读取此类文件可能导致敏感信息泄露。'
+                    for kw, desc in path_impact_map.items():
+                        if kw.lower() in line.lower():
+                            impact = desc
+                            break
+                    
+                    desc_text = (f'🔐 检测到对敏感文件路径的引用。'
+                                 f'\n\n⚠️  潜在影响: {impact}'
+                                 f'\n\n📋 可疑代码 (第 {line_num} 行):'
+                                 f'\n  {line.strip()[:200]}')
+                    
                     findings.append(CredentialFinding(
                         rule_id=rule_id, title=title, severity=severity,
-                        description=f'检测到对敏感文件路径的引用。\n\n📋 可疑代码 (第 {line_num} 行):\n```\n{line.strip()[:300]}\n```',
+                        description=desc_text,
                         file_path=str(file_path), line_number=line_num,
                         category='sensitive_file_access',
                         confidence=0.8 if is_doc else 0.9,
-                        remediation='审查对该敏感文件的访问意图。'))
+                        remediation='审查对该敏感文件的访问意图。确认是否存在将内容外传的行为（如 HTTP POST、文件上传等）。'))
         return findings
 
     def _check_browser_theft(self, content, file_path, is_sec, is_shell=False,
@@ -348,6 +396,16 @@ class CredentialTheftDetector:
         md_blocks = md_blocks or []
         fm = fm or (-1, -1)
         is_md = file_path.suffix.lower() in ('.md', '.txt', '.rst')
+        
+        browser_impact_map = {
+            'localStorage': 'LocalStorage 存储了用户的会话 Token、偏好设置和敏感数据，可被用于会话劫持。',
+            'sessionStorage': 'SessionStorage 包含当前会话的临时数据，泄露可导致中间人攻击。',
+            'document.cookie': 'Cookie 通常包含会话标识符和认证信息，窃取后可冒充用户身份。',
+            'document.body.innerText': '读取整个页面内容可能捕获用户的个人信息、财务数据等敏感内容。',
+            'Login Data': 'Chrome/Edge 浏览器的保存密码数据库，包含用户的所有网站登录凭证。',
+            'logins.json': 'Firefox 浏览器的保存密码文件，泄露后可导致所有关联账户被入侵。',
+        }
+        
         for pattern, severity, rule_id, title in BROWSER_THEFT_PATTERNS:
             for line_num, line in enumerate(content.split('\n'), 1):
                 idx = line_num - 1
@@ -360,12 +418,24 @@ class CredentialTheftDetector:
                 if is_shell and line.strip().startswith('#'):
                     continue
                 if re.search(pattern, line, re.IGNORECASE):
+                    # 构建影响说明
+                    impact = '浏览器数据存储了用户的敏感信息，未经授权访问可能导致隐私泄露和账户接管。'
+                    for kw, desc in browser_impact_map.items():
+                        if kw.lower() in line.lower():
+                            impact = desc
+                            break
+                    
+                    desc_text = (f'🌐 检测到可能的浏览器数据窃取行为。'
+                                 f'\n\n⚠️  潜在影响: {impact}'
+                                 f'\n\n📋 可疑代码 (第 {line_num} 行):'
+                                 f'\n  {line.strip()[:200]}')
+                    
                     findings.append(CredentialFinding(
                         rule_id=rule_id, title=title, severity=severity,
-                        description=f'检测到可能的浏览器数据窃取行为。\n\n📋 可疑代码 (第 {line_num} 行):\n```\n{line.strip()[:300]}\n```',
+                        description=desc_text,
                         file_path=str(file_path), line_number=line_num,
                         category='browser_data_theft', confidence=0.85,
-                        remediation='审查浏览器数据访问的真实目的。'))
+                        remediation='审查浏览器数据访问的真实目的。除非是明确的浏览器扩展开发，否则不应直接访问浏览器存储。'))
         return findings
 
     def _check_keychain(self, content, file_path, is_sec, is_shell=False,
@@ -386,12 +456,18 @@ class CredentialTheftDetector:
                 if is_shell and line.strip().startswith('#'):
                     continue
                 if re.search(pattern, line, re.IGNORECASE):
+                    desc_text = (f'🔑 检测到 macOS Keychain 访问操作。'
+                                 f'\n\n⚠️  潜在影响: Keychain 是 macOS 的核心凭证存储系统，'
+                                 f'包含 WiFi 密码、网站凭证、证书私钥等敏感信息。'
+                                 f'未经授权的访问可能导致系统级凭证泄露。'
+                                 f'\n\n📋 可疑代码 (第 {line_num} 行):'
+                                 f'\n  {line.strip()[:200]}')
                     findings.append(CredentialFinding(
                         rule_id=rule_id, title=title, severity=severity,
-                        description=f'检测到 macOS Keychain 访问操作。\n\n📋 可疑代码 (第 {line_num} 行):\n```\n{line.strip()[:300]}\n```',
+                        description=desc_text,
                         file_path=str(file_path), line_number=line_num,
                         category='keychain_access', confidence=0.9,
-                        remediation='审查 Keychain 访问的必要性。'))
+                        remediation='审查 Keychain 访问的必要性。合法的 Keychain 操作应有明确的用户授权和合理的业务需求。'))
         return findings
 
     def _check_exfil_combinations(self, content, file_path, is_sec, is_shell=False,
@@ -439,12 +515,34 @@ class CredentialTheftDetector:
                        "'item':" in stripped or "'status':" in stripped or "'action':" in stripped:
                         continue
                 if re.search(pattern, line, re.IGNORECASE):
+                    # 额外过滤：跳过枚举/常量定义行（如 DetectionCategory.CREDENTIALS）
+                    stripped = line.strip()
+                    if re.match(r'(?:category|type|kind|level)\s*[=:]\s*\w+\.', stripped, re.IGNORECASE):
+                        continue
+                    if re.match(r'(?:class|def|const|let|var)\s+\w*cred', stripped, re.IGNORECASE):
+                        continue
+                    
+                    # 构建影响说明
+                    exfil_impact_map = {
+                        'CRED_EXFIL_001': '直接读取包含敏感凭证的文件（.env、SSH 私钥、配置文件等），获取的内容可能被发送到外部服务器。',
+                        'CRED_EXFIL_002': 'webhook.site 是公开的数据接收端点，常用于快速测试数据外泄。生产代码中使用此端点高度可疑。',
+                        'CRED_EXFIL_003': 'Discord Webhook 通常被攻击者用于将窃取的数据发送到自有 Discord 频道，绕过传统安全检测。',
+                        'CRED_EXFIL_004': '通过 Telegram Bot API 发送消息可将窃取的数据推送到攻击者控制的 Telegram 群组或频道。',
+                        'CRED_EXFIL_005': '将文件打包压缩后上传是典型的大规模数据外泄手法，可能窃取整个目录的敏感文件。',
+                    }
+                    impact = exfil_impact_map.get(rule_id, '检测到可能的数据外传行为，需要进一步审查确认意图。')
+                    
+                    desc_text = (f'📤 检测到凭证外传风险模式。'
+                                 f'\n\n⚠️  潜在影响: {impact}'
+                                 f'\n\n📋 可疑代码 (第 {line_num} 行):'
+                                 f'\n  {stripped[:200]}')
+                    
                     findings.append(CredentialFinding(
                         rule_id=rule_id, title=title, severity=severity,
-                        description=f'{desc}\n\n📋 可疑代码 (第 {line_num} 行):\n```\n{line.strip()[:300]}\n```',
+                        description=desc_text,
                         file_path=str(file_path), line_number=line_num,
                         category='credential_exfiltration', confidence=0.85,
-                        remediation='审查数据外传的目标和内容。'))
+                        remediation='审查数据外传的目标和内容。除非有明确的业务需求且经过安全审计，否则不应将敏感数据传输到外部端点。'))
         return findings
 
     def get_summary(self) -> Dict:

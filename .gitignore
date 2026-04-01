@@ -23,5 +23,9 @@ data/baseline.json
 lib/.semantic_cache.json
 tmp/
 config/whitelist.json
+config/*.json
+config/*.key
+config/api_keys.*
+lib/threat_intel.json
 .skills-snapshot-multi.txt
 *.snapshot*

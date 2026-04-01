@@ -77,15 +77,31 @@ class ThreatIntelligence:
     
     def check_domain(self, domain: str) -> Tuple[bool, Optional[str]]:
         """
-        检查域名/IP 是否在 IOC 列表中
+        检查域名/IP 是否在 IOC 列表中（支持精确域名 + CIDR IP 段匹配）
         
         Returns:
             (is_blacklisted, matched_ioc)
         """
-        domain_lower = domain.lower()
+        import ipaddress
+        
+        domain_lower = domain.lower().strip()
+        
+        # ── 1. 精确域名/IP 匹配 ────────────────────────
         for ioc in self.intel_data.get('ioc_domains', []):
-            if ioc.lower() in domain_lower:
+            if ioc.lower() in domain_lower or domain_lower == ioc.lower():
                 return True, ioc
+        
+        # ── 2. CIDR 网段匹配（Spamhaus DROP / Firehol）──
+        if re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', domain_lower):
+            try:
+                target_ip = ipaddress.ip_address(domain_lower)
+                for cidr in self.intel_data.get('cidr_ranges', []):
+                    network = ipaddress.ip_network(cidr, strict=False)
+                    if target_ip in network:
+                        return True, cidr
+            except ValueError:
+                pass
+        
         return False, None
     
     def check_author(self, author: str) -> Tuple[bool, Optional[str]]:

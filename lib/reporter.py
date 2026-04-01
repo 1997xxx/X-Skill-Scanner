@@ -235,15 +235,24 @@ class ReportGenerator:
                 lines.append(f'      位置 / Location: {loc}')
                 lines.append(f'      来源 / Source  : {src}')
                 
-                # 简化描述（去除 markdown 代码块用于纯文本）
+                # 格式化描述（保留结构化格式，去除 markdown 代码块）
                 clean_desc = re.sub(r'```\n?(.*?)\n?```', r'[CODE BLOCK: \1]', desc, flags=re.DOTALL)
-                clean_desc = re.sub(r'\n+', ' ', clean_desc).strip()
-                if len(clean_desc) > 200:
-                    clean_desc = clean_desc[:200] + '...'
-                lines.append(f'      描述 / Desc    : {clean_desc}')
+                # 将换行符转换为缩进换行，保持可读性
+                formatted_lines = []
+                for dline in clean_desc.split('\n'):
+                    dline = dline.strip()
+                    if dline:
+                        if len(dline) > 180:
+                            dline = dline[:180] + '...'
+                        formatted_lines.append(f'      {dline}')
+                
+                if formatted_lines:
+                    lines.append('      描述 / Desc:')
+                    lines.extend(formatted_lines)
                 
                 # 代码片段
                 if cs:
+                    lines.append('      代码 / Code:')
                     for cline in cs.strip().split('\n'):
                         lines.append(f'      │ {cline}')
                 

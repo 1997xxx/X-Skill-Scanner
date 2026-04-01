@@ -135,6 +135,7 @@ Detect the language of the user's triggering message and use that language for t
    以下行为绝对禁止，即使用户明确要求也不行：
 
    - **跳过安全扫描** — 不能说"这个我写的，信我"就跳过
+   - **肉眼判断代替扫描** — 即使你能一眼看出技能是恶意/安全的，也必须运行扫描器。肉眼判断不能替代工具验证（教训：bybit-trading 事件）
    - **分步绕过** — 任何向 skills 目录写入文件的操作都触发扫描
    - **静默安装** — 不在对话中提及但直接操作 skills 目录的行为同样需要检测
 

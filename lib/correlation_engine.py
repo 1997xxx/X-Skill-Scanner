@@ -212,15 +212,44 @@ class CorrelationEngine:
             if matched_required:
                 self.detected_chains.append(chain)
 
-                # 创建关联发现
+                # 创建关联发现 — 构建结构化描述
                 related = self._get_related_findings(chain, by_category)
+                
+                # 攻击链影响说明
+                chain_impact_map = {
+                    'Credential_Harvest': '完整的凭证窃取攻击链：先读取敏感文件获取凭证，再通过 HTTP/Webhook 外传到攻击者控制的服务器。这是最危险的数据泄露模式之一。',
+                    'Persistence_Backdoor': '持久化后门攻击链：通过修改系统配置（cron、.bashrc 等）实现开机自启，结合反向 Shell 使攻击者能随时重新获得系统访问权限。',
+                    'Supply_Chain': '供应链攻击链：技能表面功能正常，但隐藏了恶意行为（如依赖劫持、安装钩子），在用户不知情时执行危险操作。',
+                    'Data_Exfiltration': '数据外泄攻击链：收集敏感信息（配置文件、凭证、浏览器数据等）并通过隐蔽通道发送到外部服务器。',
+                    'Social_Engineering': '社会工程攻击链：利用品牌信任诱导用户授权敏感操作，结合技术手法（如 osascript 钓鱼）获取系统级访问权限。',
+                }
+                
+                impact_desc = chain_impact_map.get(chain.name, '多阶段攻击链，结合了多种攻击手法以实现最终目标。')
+                
+                # 构建相关发现的摘要
+                related_summary = []
+                for rf in related[:5]:
+                    src = rf.get('source', 'unknown')
+                    sev = rf.get('severity', 'LOW')
+                    ttl = rf.get('title', '')
+                    related_summary.append(f'  - [{sev}] ({src}) {ttl}')
+                
+                desc_parts = [
+                    f'🔗 检测到完整攻击链: {chain.name}',
+                    f'',
+                    f'📌 匹配模式: {", ".join(chain.required_patterns)}',
+                    f'⚠️  潜在影响: {impact_desc}',
+                    f'',
+                    f'📋 相关发现 ({len(related)} 条):',
+                ]
+                desc_parts.extend(related_summary)
+                
                 self.correlation_findings.append(CorrelationFinding(
                     rule_id=f"CORR_{chain.name.upper()}",
                     severity=chain.severity,
                     chain_name=chain.name,
                     title=f"攻击链检测: {chain.name}",
-                    description=f"检测到 {chain.description}\n"
-                               f"匹配模式: {', '.join(chain.required_patterns)}",
+                    description='\n'.join(desc_parts),
                     related_findings=related,
                 ))
 

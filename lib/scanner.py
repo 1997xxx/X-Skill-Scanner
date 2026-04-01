@@ -66,6 +66,12 @@ from llm_reviewer import LLMReviewer
 from skill_profiler import SkillProfiler
 from fp_filter import FPFilter
 
+# v5.1 新增引擎 — 前置合法性检查（Gatekeeper）
+from pre_flight_check import PreFlightCheck
+
+# v5.1 新增引擎 — 文档社会工程学检测
+from social_engineering_detector import SocialEngineeringDetector
+
 
 class SkillScanner:
     """技能安全扫描器 v5.0 — 轻量初筛 + LLM 二次审查"""
@@ -184,6 +190,12 @@ class SkillScanner:
         self.skill_profiler = SkillProfiler()
         self.fp_filter = FPFilter()
         self._skill_profile = None      # 扫描时填充
+
+        # v5.1 新增引擎 — 前置合法性检查（Gatekeeper）
+        self.pre_flight_check = PreFlightCheck()
+
+        # v5.1 新增引擎 — 文档社会工程学检测
+        self.social_engineering_detector = SocialEngineeringDetector()
 
     # ─── 辅助方法 ───────────────────────────────────────────────
     def _extract_skill_metadata(self, target: Path) -> Dict:
@@ -310,26 +322,55 @@ class SkillScanner:
         
         # SkillJect 活动特征：隐蔽执行链
         execution_chain_indicators = [
-            (r'curl.*\|\s*(ba)?sh', '远程脚本直接执行'),
-            (r'wget.*-O-.*\|\s*(ba)?sh', 'wget 管道执行'),
-            (r'python3?\s+-c\s+["\'].*import\s+os', '内联 Python 代码执行'),
-            (r'eval\s*\(', '动态代码执行 (eval)'),
-            (r'exec\s*\(', '动态代码执行 (exec)'),
+            (r'curl.*\|\s*(ba)?sh', '远程脚本直接执行',
+             '通过 curl 下载远程脚本并直接通过管道执行，无需写入磁盘即可运行任意代码。攻击者可随时修改远程内容实现零日攻击。'),
+            (r'wget.*-O-.*\|\s*(ba)?sh', 'wget 管道执行',
+             '通过 wget 下载远程脚本并通过标准输出管道执行，是常见的无文件攻击手法。'),
+            (r'python3?\s+-c\s+["\'].*import\s+os', '内联 Python 代码执行',
+             '使用 python -c 内联执行包含 os 模块导入的代码，可绕过常规的文件扫描检测。'),
+            (r'eval\s*\(', '动态代码执行 (eval)',
+             '使用 eval() 在运行时动态执行字符串形式的代码，是 SkillJect 攻击的核心技术。恶意代码可在安装时或运行时被触发。'),
+            (r'exec\s*\(', '动态代码执行 (exec)',
+             '使用 exec() 在运行时动态执行代码，与 eval 类似但更危险，可执行任意 Python 语句块。'),
         ]
         
         for file_path in files_to_scan:
             try:
                 content = file_path.read_text(encoding='utf-8', errors='ignore')
-                for pattern, desc in execution_chain_indicators:
-                    if re.search(pattern, content):
+                for pattern, desc, impact_desc in execution_chain_indicators:
+                    match = re.search(pattern, content)
+                    if match:
+                        # 提取匹配的代码行作为证据
+                        matched_lines = []
+                        for line in content.split('\n'):
+                            stripped = line.strip()
+                            if stripped and not stripped.startswith('#'):
+                                try:
+                                    if re.search(pattern, line):
+                                        matched_lines.append(stripped)
+                                        if len(matched_lines) >= 2:
+                                            break
+                                except re.error:
+                                    pass
+                        
+                        desc_parts = [f'🔴 检测到 SkillJect 风格的隐蔽执行链']
+                        desc_parts.append(f'\n📌 执行模式: {desc}')
+                        desc_parts.append(f'📁 文件: {file_path.name}')
+                        desc_parts.append(f'\n⚠️  潜在影响: {impact_desc}')
+                        
+                        if matched_lines:
+                            desc_parts.append('\n📋 匹配代码片段:')
+                            for ml in matched_lines:
+                                desc_parts.append(f'  {ml[:150]}')
+                        
                         findings.append({
                             'rule_id': 'CAMPAIGN_SKILLJECT_001',
                             'severity': 'CRITICAL',
                             'category': 'threat_intel',
                             'title': f'SkillJect 执行链检测: {desc}',
-                            'description': f'检测到 SkillJect 风格的隐蔽执行链\n模式：{desc}\n文件：{file_path.name}\n建议：立即终止安装流程',
+                            'description': '\n'.join(desc_parts),
                             'file_path': str(file_path),
-                            'remediation': '禁止安装，这是典型的 SkillJect 攻击模式',
+                            'remediation': '禁止安装。SkillJect 是一种通过动态代码执行在安装或运行时注入恶意代码的攻击手法。审查所有 eval/exec/管道执行的使用场景。',
                             'source': 'threat_intel',
                         })
                         break  # One finding per file is enough
@@ -366,6 +407,42 @@ class SkillScanner:
         except Exception as e:
             _p(f"   ⚠️  统计文件数失败: {e}")
             total_files = 0
+
+        # ─── v5.1: 前置合法性检查（Gatekeeper）─────────────────────
+        _p("🛡️  步骤 -1/7: 前置合法性检查...")
+        pfc_result = self.pre_flight_check.validate(target)
+        if not pfc_result['passed']:
+            _p(f"   ❌ 前置合法性检查未通过: {pfc_result['message']}")
+            for f in pfc_result['findings']:
+                sev_icon = {'CRITICAL': '⛔', 'HIGH': '🔴', 'MEDIUM': '🟡'}.get(f['severity'], 'ℹ️')
+                _p(f"      {sev_icon} [{f['severity']}] {f['title']} ({f['file']})")
+            
+            # 将 PFC 发现转换为扫描器格式并加入结果
+            pfc_findings = []
+            for f in pfc_result['findings']:
+                pfc_findings.append({
+                    'id': f['id'],
+                    'severity': f['severity'],
+                    'category': f.get('category', 'pre_flight'),
+                    'title': f['title'],
+                    'file': f['file'],
+                    'line': f.get('line', 0),
+                    'description': f['description'],
+                    'recommendation': f['recommendation'],
+                })
+            
+            return {
+                'target': str(target),
+                'status': 'PRE_FLIGHT_FAILED',
+                'verdict': 'BLOCK',
+                'message': pfc_result['message'],
+                'findings': pfc_findings,
+                'risk_score': 100,
+                'risk_level': 'EXTREME',
+                'total_files': total_files,
+                'pre_flight_findings': pfc_result['findings'],
+            }
+        _p(f"   ✅ {pfc_result['message']}")
 
         # 0. 白名单检查
         if self.enable_whitelist:
@@ -465,13 +542,14 @@ class SkillScanner:
             # 1c. IOC 域名/IP 扫描 (优化：只扫描可执行文件和配置文件)
             ioc_findings = []
             scan_extensions = {'.py', '.sh', '.js', '.ts', '.bash', '.zsh', '.json', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf'}
+            doc_extensions = {'.md', '.txt', '.rst', '.text'}  # v5.1: 文档也需扫描 IOC（bybit-trading 教训）
             # v5.0: 跳过扫描器自身的参考数据文件（避免自引用误报）
             ref_data_names = {'threat_intel.json', '.semantic_cache.json', 'baseline.json',
                               'whitelist.json', 'malicious_skills.json', 'known_bad.json'}
             files_to_scan = [target] if target.is_file() else [
                 f for f in target.rglob('*') 
                 if f.is_file() and f.name not in ref_data_names
-                   and (f.suffix.lower() in scan_extensions or f.name in ['Makefile', 'Dockerfile', '.env'])
+                   and (f.suffix.lower() in scan_extensions or f.suffix.lower() in doc_extensions or f.name in ['Makefile', 'Dockerfile', '.env'])
             ]
             
             for file_path in files_to_scan:
@@ -503,14 +581,75 @@ class SkillScanner:
                     content = file_path.read_text(encoding='utf-8', errors='ignore')
                     pattern_matches = self.threat_intel.check_code_patterns(content, file_path)
                     for pm in pattern_matches:
+                        pattern_id = pm['pattern_id']
+                        indicator = pm['indicator']
+                        severity = pm['severity']
+                        pat_desc = pm.get('description', '')
+                        
+                        # 构建结构化描述
+                        desc_parts = [f'🔍 检测到已知攻击模式：{pat_desc}']
+                        desc_parts.append(f'\n📌 模式 ID: {pattern_id}')
+                        desc_parts.append(f'🎯 匹配指示器: `{indicator}`')
+                        desc_parts.append(f'📁 文件: {file_path.name}')
+                        
+                        # 根据模式类型补充影响说明
+                        impact_map = {
+                            'credential_harvesting': '该模式会收集用户的敏感凭证（API 密钥、密码、Token 等），可能导致账户被未授权访问。',
+                            'config_exfiltration': '该模式读取 Agent 配置文件并通过 HTTP 请求发送到外部服务器，属于典型的数据外泄行为。',
+                            'remote_script_download': '该模式从远程服务器下载并执行脚本，攻击者可通过修改远程内容实现任意代码执行。',
+                            'reverse_shell': '该模式建立反向 Shell 连接，使攻击者能够远程控制受害系统。',
+                            'base64_exec': '该模式使用 Base64 编码隐藏恶意载荷以绕过静态检测，解码后执行危险操作。',
+                            'macos_staged_payload': '该模式在 macOS 上分阶段下载、剥离安全属性并执行载荷，是典型的持久化攻击手法。',
+                            'typosquatting': '该技能名称模仿知名项目，利用用户拼写错误进行钓鱼或分发恶意代码。',
+                            'hidden_backdoor': '该技能表面功能正常，但隐藏了后门行为（如 cron 定时任务、反向 Shell 等）。',
+                            'prompt_injection': '该模式尝试通过注入指令覆盖 Agent 的原始提示词，可能导致信息泄露或未授权操作。',
+                            'social_engineering': '该技能滥用知名品牌名称获取用户信任，诱导用户执行危险操作。',
+                            'webhook_exfiltration': '该模式通过 Webhook（Discord/Telegram/webhook.site）将窃取的数据发送到攻击者控制的端点。',
+                            'browser_data_theft': '该模式窃取浏览器存储的敏感数据（Cookie、LocalStorage、保存的密码等）。',
+                            'nova_stealer_c2': '该模式与 Nova Stealer 恶意软件的 C2 通信特征匹配，用于窃取系统凭证。',
+                            'osascript_password_phishing': '该模式通过 macOS osascript 伪造系统密码对话框进行钓鱼攻击（Nova Stealler 技术）。',
+                        }
+                        if pattern_id in impact_map:
+                            desc_parts.append(f'\n⚠️  潜在影响: {impact_map[pattern_id]}')
+                        
+                        # 提取匹配的代码行作为证据
+                        matched_lines = []
+                        for line in content.split('\n'):
+                            if indicator.lower() in line.lower():
+                                stripped = line.strip()
+                                if stripped and not stripped.startswith('#'):
+                                    matched_lines.append(stripped)
+                                    if len(matched_lines) >= 3:
+                                        break
+                        
+                        if matched_lines:
+                            desc_parts.append('\n📋 匹配代码片段:')
+                            for ml in matched_lines:
+                                desc_parts.append(f'  {ml[:120]}')
+                        
+                        full_description = '\n'.join(desc_parts)
+                        
+                        # 生成针对性修复建议
+                        remediation_map = {
+                            'credential_harvesting': '立即拒绝安装。检查代码中所有引用 .env、password、token 的位置，确认是否有外部传输行为。',
+                            'config_exfiltration': '立即拒绝安装。搜索所有 .post(、fetch(、webhook 调用，确认数据外传目标地址。',
+                            'remote_script_download': '禁止安装包含远程脚本执行的技能。所有依赖应通过包管理器安装，而非动态下载执行。',
+                            'reverse_shell': '立即拒绝安装并报告安全团队。这是高危持久化攻击手法。',
+                            'base64_exec': '拒绝安装。要求作者提供解码后的源码供审查，或直接拒绝模糊不清的技能。',
+                            'prompt_injection': '拒绝安装。检查所有 system prompt 相关操作，确保无指令注入风险。',
+                            'social_engineering': '拒绝安装。验证技能名称和作者身份的真实性。',
+                            'webhook_exfiltration': '立即拒绝安装。搜索所有 webhook.site、discord.com/api/webhooks 等外部端点引用。',
+                        }
+                        remediation = remediation_map.get(pattern_id, '审查相关代码段，确认是否存在恶意行为。重点关注指示器 `' + indicator + '` 的使用上下文。')
+                        
                         attack_pattern_findings.append({
-                            'rule_id': f'THREAT_PATTERN_{pm["pattern_id"].upper()}',
-                            'severity': pm['severity'],
+                            'rule_id': f'THREAT_PATTERN_{pattern_id.upper()}',
+                            'severity': severity,
                             'category': 'threat_intel',
-                            'title': f'攻击模式匹配: {pm["description"]}',
-                            'description': f'检测到已知攻击模式\n模式：{pm["pattern_id"]}\n指示器：{pm["indicator"]}\n严重程度：{pm["severity"]}',
+                            'title': f'攻击模式匹配: {pat_desc}',
+                            'description': full_description,
                             'file_path': str(file_path),
-                            'remediation': '审查相关代码段，确认是否存在恶意行为',
+                            'remediation': remediation,
                             'source': 'threat_intel',
                         })
                 except Exception:
@@ -532,6 +671,32 @@ class SkillScanner:
             # 性能优化：如果发现 CRITICAL 威胁情报，提前终止扫描
             if is_malicious or ioc_findings:
                 _p("   ⚡ 发现 CRITICAL 威胁情报，跳过后续轻量级检查")
+
+        # 1.5 文档社会工程学检测 (v5.1 新增 — bybit-trading 事件教训)
+        _p("\n📋 步骤 1.5/7: 文档社会工程学检测...")
+        se_findings = self.social_engineering_detector.scan(target)
+        for f in se_findings:
+            all_findings.append({
+                'rule_id': f['id'],
+                'severity': f['severity'],
+                'category': f.get('category', 'social_engineering'),
+                'title': f['title'],
+                'description': f.get('description', ''),
+                'file_path': f['file'],
+                'line_number': f.get('line', 0),
+                'remediation': f.get('recommendation', '人工审查'),
+                'source': 'social_engineering',
+                'matched_line': f.get('matched_line', ''),
+            })
+        if se_findings:
+            _p(f"   ⚠️  发现 {len(se_findings)} 个社会工程学问题")
+            for f in se_findings[:5]:  # 只显示前 5 条
+                sev_icon = {'CRITICAL': '⛔', 'HIGH': '🔴', 'MEDIUM': '🟡', 'LOW': 'ℹ️'}.get(f['severity'], 'ℹ️')
+                _p(f"      {sev_icon} [{f['severity']}] {f['title']}")
+            if len(se_findings) > 5:
+                _p(f"      ... 还有 {len(se_findings) - 5} 条")
+        else:
+            _p("   ✅ 未发现社会工程学攻击模式")
 
         # 2. 去混淆检测 (v3.0 新增)
         if self.deobfuscator and not target.is_file() and self._should_run_engine("deobfuscation"):
@@ -1154,6 +1319,13 @@ def main():
         help='输出格式: text|json|html(默认)|md|sarif',
     )
 
+    # 安装
+    parser.add_argument('--install', action='store_true', help=argparse.SUPPRESS)  # 兼容旧参数
+    parser.add_argument('--no-prompt', action='store_true',
+                        help='跳过安装询问（CI/自动化模式）')
+    parser.add_argument('--install-to', default=None,
+                        help='安装目标目录（默认 ~/.openclaw/workspace/skills/）')
+
     # 语言
     parser.add_argument(
         '--lang',
@@ -1312,6 +1484,51 @@ def main():
         import shutil
         shutil.rmtree(temp_dir)
         _p(f"🧹 已清理临时文件: {temp_dir}")
+
+    # ─── 交互式安装询问（默认启用） ──────────────────────
+    if not args.no_prompt:
+        risk_level = result.get('risk_level', 'UNKNOWN')
+        risk_score = result.get('risk_score', 0)
+        verdict = result.get('verdict', '')
+        skill_name = Path(target_path).name
+
+        _p(f"\n{'=' * 60}")
+        _p(f"📦 技能: {skill_name}")
+        _p(f"   风险等级: {risk_level} ({risk_score}/100)")
+        _p(f"   扫描结论: {verdict}")
+        _p(f"{'=' * 60}")
+
+        try:
+            answer = input("\n是否安装此技能？[y/N]: ").strip().lower()
+            if answer in ('y', 'yes'):
+                default_skills_dir = Path.home() / '.openclaw' / 'workspace' / 'skills'
+                install_dir_str = args.install_to or input(f"安装路径 [默认: {default_skills_dir}]: ").strip()
+                install_dir = Path(install_dir_str) if install_dir_str else default_skills_dir
+                install_dir.mkdir(parents=True, exist_ok=True)
+                dest = install_dir / skill_name
+
+                if dest.exists():
+                    overwrite = input(f"⚠️  {dest} 已存在，是否覆盖？[y/N]: ").strip().lower()
+                    if overwrite not in ('y', 'yes'):
+                        _p("❌ 取消安装")
+                        sys.exit(0)
+
+                import shutil
+                target_p = Path(target_path)
+                if target_p.is_dir():
+                    shutil.copytree(str(target_p), str(dest), dirs_exist_ok=True)
+                else:
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(str(target_p), str(dest))
+
+                _p(f"✅ 已安装到: {dest}")
+                sys.exit(0)
+            else:
+                _p("❌ 取消安装")
+                sys.exit(0)
+        except (EOFError, KeyboardInterrupt):
+            _p("\n❌ 取消安装")
+            sys.exit(0)
 
     # 根据风险等级设置退出码
     if result.get('risk_level') in ['EXTREME', 'HIGH']:
