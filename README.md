@@ -59,22 +59,22 @@ Detects multi-stage attack chains across detection layers:
 
 ## 🛡️ Twelve-Layer Defense Pipeline / 十二层防御管线
 
-| Layer | Engine | Capability |
+| Layer | Engine / 引擎 | Capability / 能力 |
 |-------|--------|------------|
-| 0 | 🎯 Skill Profiler | Trust score · scan strategy recommendation · risk fingerprint |
-| 1 | 🔍 Threat Intel | 380+ malicious skill names · IOC domains/IPs · attack patterns |
-| 2 | 🧹 Deobfuscation | Base64/Hex/BiDi/zero-width/TR39/Zlib/string concatenation |
-| 3 | 🔎 Static Analysis | 194+ rules · credentials/injection/supply chain/time bombs |
-| 4 | 🌳 AST Deep Analysis | Taint tracking · indirect execution · dynamic imports |
-| 5 | 📦 Dependency Check | requirements.txt / package.json CVE matching |
-| 6 | 💉 Prompt Injection | 25+ probes · system override · role hijacking · DAN/Jailbreak |
-| 7 | 📋 Baseline Tracking | SHA-256 fingerprint · rug-pull detection |
-| 8 | 🧠 Semantic Audit | LLM intent analysis (optional, for high-risk files) |
-| 9 | 📊 Entropy Analysis | Shannon entropy · CJK adaptive thresholds · encoded payloads |
-| 10 | 🔧 Install Hooks | postinstall · setup.py · shell RC · cron injection |
-| 11 | 🌐 Network Profiler | endpoint extraction · IP direct connect · covert channels · C2 |
-| 12 | 🔐 Credential Theft | osascript phishing · SSH/AWS keys · browser cookies · Keychain |
-| 🔗 | Cross-Layer Correlation | Multi-engine attack chain detection · correlation scoring |
+| 0 | 🎯 Skill Profiler / 技能画像 | Trust score · scan strategy · risk fingerprint<br>信任评分 · 扫描策略推荐 · 风险指纹 |
+| 1 | 🔍 Threat Intel / 威胁情报 | 380+ malicious skill names · IOC domains/IPs · attack patterns<br>380+ 恶意技能名 · IOC 域名/IP · 攻击模式 |
+| 2 | 🧹 Deobfuscation / 去混淆 | Base64/Hex/BiDi/zero-width/TR39/Zlib/string concatenation<br>Base64/十六进制/双向字符/零宽字符/TR39/Zlib/字符串拼接 |
+| 3 | 🔎 Static Analysis / 静态分析 | 194+ rules · credentials/injection/supply chain/time bombs<br>194+ 规则 · 凭据/注入/供应链/逻辑炸弹检测 |
+| 4 | 🌳 AST Deep Analysis / AST 深度分析 | Taint tracking · indirect execution · dynamic imports<br>污点追踪 · 间接执行 · 动态导入 |
+| 5 | 📦 Dependency Check / 依赖检查 | requirements.txt / package.json CVE matching<br>CVE 漏洞匹配（Python/Node.js） |
+| 6 | 💉 Prompt Injection / 提示注入 | 25+ probes · system override · role hijacking · DAN/Jailbreak<br>25+ 探针 · 系统覆盖 · 角色劫持 · DAN/越狱检测 |
+| 7 | 📋 Baseline Tracking / 基线追踪 | SHA-256 fingerprint · rug-pull detection<br>SHA-256 指纹 · 撤资跑路检测 |
+| 8 | 🧠 Semantic Audit / 语义审计 | LLM intent analysis (optional, for high-risk files)<br>LLM 意图分析（可选，针对高风险文件） |
+| 9 | 📊 Entropy Analysis / 熵值分析 | Shannon entropy · CJK adaptive thresholds · encoded payloads<br>香农熵 · 中日韩自适应阈值 · 编码载荷检测 |
+| 10 | 🔧 Install Hooks / 安装钩子 | postinstall · setup.py · shell RC · cron injection<br>postinstall · setup.py · Shell 启动项 · Cron 注入 |
+| 11 | 🌐 Network Profiler / 网络画像 | Endpoint extraction · IP direct connect · covert channels · C2<br>端点提取 · IP 直连 · 隐蔽通道 · C2 通信检测 |
+| 12 | 🔐 Credential Theft / 凭据窃取 | osascript phishing · SSH/AWS keys · browser cookies · Keychain<br>osascript 钓鱼 · SSH/AWS 密钥 · 浏览器 Cookie · 钥匙串 |
+| 🔗 | Cross-Layer Correlation / 跨层关联 | Multi-engine attack chain detection · correlation scoring<br>多引擎攻击链检测 · 关联评分 |
 
 ---
 
@@ -106,14 +106,14 @@ pip install -r requirements.txt
 
 ### Configuration / 配置
 
-Set environment variables for LLM-powered features:
+为 LLM 驱动的功能设置环境变量：
 ```bash
 export OPENAI_BASE_URL="https://your-provider.com/v1/chat/completions"
 export OPENAI_API_KEY="your-api-key"
 export OPENAI_MODEL="gpt-4o-mini"
 ```
 
-Or configure in `~/.openclaw/openclaw.json` — the scanner auto-discovers providers.
+或在 `~/.openclaw/openclaw.json` 中配置 — 扫描器会自动发现 Provider。
 
 ### CLI Options / 命令行选项
 
@@ -136,50 +136,50 @@ Or configure in `~/.openclaw/openclaw.json` — the scanner auto-discovers provi
 
 ## 📊 Risk Levels / 风险等级
 
-| Level | Score | Action |
+| Level | Score | Action / 处理方式 |
 |-------|-------|--------|
-| 🟢 SAFE | 0–4 | ✅ No significant issues |
-| 🟢 LOW | 5–19 | ✅ Safe to install |
-| 🟡 MEDIUM | 20–49 | ⚠️ Review before installing |
-| 🔴 HIGH | 50–79 | ❌ Do not install without approval |
-| ⛔ EXTREME | 80–100 | ❌ Block immediately |
+| 🟢 SAFE | 0–4 | ✅ 无显著问题 / No significant issues |
+| 🟢 LOW | 5–19 | ✅ 可安全安装 / Safe to install |
+| 🟡 MEDIUM | 20–49 | ⚠️ 建议人工审查后决定 / Review before installing |
+| 🔴 HIGH | 50–79 | ❌ 未经批准禁止安装 / Do not install without approval |
+| ⛔ EXTREME | 80–100 | ❌ 立即阻断 / Block immediately |
 
 ---
 
 ## 🏗️ Architecture / 架构概览
 
 ```
-Skill Input
+Skill Input / 技能输入
     │
     ▼
-┌─ Whitelist Check ──────────────────────────────┐
+┌─ Whitelist Check / 白名单检查 ───────────────────┐
 │                                                  │
-│  ┌─ Skill Profiler ──→ scan_strategy ────────┐  │
-│  │  quick / standard / full                   │  │
+│  ┌─ Skill Profiler / 技能画像 → scan_strategy ─┐ │
+│  │  quick(快速) / standard(标准) / full(全面)   │ │
 │  ▼                                            │  │
-│  ┌─ Threat Intel ──→ malicious names/IOC     │  │
-│  ├─ Deobfuscation ──→ Base64/Hex/BiDi        │  │
-│  ├─ Static Analysis ──→ 194+ rules           │  │ ← controlled by
-│  ├─ AST Analysis ──→ taint tracking           │  │   scan_strategy
-│  ├─ Dependency Check ──→ CVE matching         │  │
-│  ├─ Prompt Injection ──→ 25+ probes           │  │
-│  ├─ Baseline Tracking ──→ SHA-256 diff        │  │
-│  ├─ Semantic Audit ──→ LLM intent             │  │
-│  ├─ Entropy Analysis ──→ anomaly detection    │  │
-│  ├─ Install Hooks ──→ postinstall/setup.py    │  │
-│  ├─ Network Profiler ──→ C2/exfil detection   │  │
-│  └─ Credential Theft ──→ osascript/SSH/AWS    │  │
+│  ┌─ Threat Intel / 威胁情报 → names/IOC       │  │
+│  ├─ Deobfuscation / 去混淆 → Base64/Hex/BiDi  │  │
+│  ├─ Static Analysis / 静态分析 → 194+ rules   │  │ ← controlled by
+│  ├─ AST Analysis / AST 分析 → taint tracking   │  │   scan_strategy
+│  ├─ Dependency Check / 依赖检查 → CVE matching │  │
+│  ├─ Prompt Injection / 提示注入 → 25+ probes   │  │
+│  ├─ Baseline Tracking / 基线追踪 → SHA-256     │  │
+│  ├─ Semantic Audit / 语义审计 → LLM intent     │  │
+│  ├─ Entropy Analysis / 熵值分析 → anomaly      │  │
+│  ├─ Install Hooks / 安装钩子 → postinstall     │  │
+│  ├─ Network Profiler / 网络画像 → C2/exfil     │  │
+│  └─ Credential Theft / 凭据窃取 → osascript    │  │
 │                                                  │
-│  ┌─ Cross-Layer Correlation ──→ attack chains  │  │
-│  └─ FP Pre-Filter ──→ auto-filter known FPs   │  │
+│  ┌─ Cross-Layer Correlation / 跨层关联 → chains │ │
+│  └─ FP Pre-Filter / 误报预过滤 → auto-filter   │  │
 │                                                  │
-│  ┌─ LLM Batch Review ──→ TP/FP/HUMAN_REVIEW   │  │
-│  └─ Risk Scorer ──→ final score + verdict     │  │
+│  ┌─ LLM Batch Review / LLM 批量审查            │  │
+│  └─ Risk Scorer / 风险评分 → score + verdict   │  │
 │                                                  │
 └──────────────────────────────────────────────────┘
     │
     ▼
-Report (text / HTML / JSON / SARIF)
+Report / 报告 (text / HTML / JSON / SARIF)
 ```
 
 ---
