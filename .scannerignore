@@ -33,12 +33,7 @@ lib/dependency_checker.py
 lib/scanner.py
 lib/path_filter.py
 lib/semantic_auditor.py
-lib/setup_semantic_audit.py
 lib/whitelist.py
 lib/prompt_injection_probes.py
-lib/shield_monitor.py
-hooks/clawhub_hook.py
-scripts/update_threat_intel.py
-scripts/semantic_audit_*.py
-scripts/llm_semantic_audit.py
+scripts/update-threat-intel.py
 scripts/sanitize_for_opensource.sh

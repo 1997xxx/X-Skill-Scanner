@@ -1,8 +1,0 @@
-#!/bin/bash
-#
-# Ant International Skill Scanner - 安全安装脚本
-# 用法：./safe-install clawhub install <skill-name>
-#
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec "$SCRIPT_DIR/lib/install_wrapper.sh" "$@"
