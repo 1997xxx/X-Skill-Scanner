@@ -209,6 +209,14 @@ class ThreatIntelligence:
         if file_path and self._is_json_data_file(file_path):
             return []
         
+        # v5.2.1: Skip scanner's own documentation files
+        # These contain IOC examples and attack descriptions for reference purposes
+        self_doc_files = {'changelog.md', 'readme.md', 'readme_ch.md', 'skill.md'}
+        if file_path:
+            fname_lower = Path(file_path).name.lower()
+            if fname_lower in self_doc_files:
+                return []
+        
         matches = []
         patterns = self.get_attack_patterns()
         lines = code.split('\n')

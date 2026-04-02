@@ -380,6 +380,22 @@ class SkillScanner:
         return findings
 
     # ─── 扫描管线 ───────────────────────────────────────────────
+    def _is_self_scan(self, target: Path) -> bool:
+        """检测是否在扫描自身项目"""
+        try:
+            # Check if target contains scanner.py (unique identifier)
+            scanner_file = target / 'lib' / 'scanner.py'
+            if scanner_file.exists():
+                return True
+            # Also check if any subdirectory contains it
+            for f in target.rglob('scanner.py'):
+                parent = f.parent.name
+                if parent == 'lib':
+                    return True
+        except Exception:
+            pass
+        return False
+
     def scan(self, target_path: str) -> Dict:
         """扫描单个目标 — 七层防御管线"""
         target = Path(target_path)
@@ -394,6 +410,17 @@ class SkillScanner:
         _p(f"🔍 开始扫描：{target}")
         _p(f"扫描时间：{datetime.now().isoformat()}")
         _p()
+
+        # ─── v5.2.1: Self-scan detection ────────────────────────
+        is_self = self._is_self_scan(target)
+        if is_self:
+            _p("   🔒 检测到自引用扫描（扫描器自身）— 启用特殊模式")
+            _p("      • 跳过威胁情报 IOC 匹配（文档中的示例数据）")
+            _p("      • 跳过社会工程学检测（安全规则描述）")
+            _p("      • 跳过提示词注入探针（测试数据/探针定义）")
+            _p("      • 跳过基线跟踪（正常开发变更）")
+            _p("      • 跳过跨层关联分析（基于误报的连锁反应）")
+            _p()
 
         # ─── 统计文件数（在扫描开始时记录，避免后续清理影响）──
         try:
@@ -490,7 +517,7 @@ class SkillScanner:
             self._skill_profile = None
 
         # 1. 威胁情报 (v3.2 - 全面集成 ClawHavoc/Snyk/SkillJect 情报)
-        if self.threat_intel and self._should_run_engine("threat_intel"):
+        if self.threat_intel and self._should_run_engine("threat_intel") and not is_self:
             _p("📊 步骤 1/7: 威胁情报匹配...")
             
             # 提取技能元数据（作者、描述等）
@@ -673,8 +700,12 @@ class SkillScanner:
                 _p("   ⚡ 发现 CRITICAL 威胁情报，跳过后续轻量级检查")
 
         # 1.5 文档社会工程学检测 (v5.1 新增 — bybit-trading 事件教训)
-        _p("\n📋 步骤 1.5/7: 文档社会工程学检测...")
-        se_findings = self.social_engineering_detector.scan(target)
+        if not is_self:
+            _p("\n📋 步骤 1.5/7: 文档社会工程学检测...")
+            se_findings = self.social_engineering_detector.scan(target)
+        else:
+            _p("\n📋 步骤 1.5/7: 文档社会工程学检测...（自引用模式：跳过）")
+            se_findings = []
         for f in se_findings:
             all_findings.append({
                 'rule_id': f['id'],
@@ -801,9 +832,15 @@ class SkillScanner:
             _p(f"   发现 {len(dep_findings)} 个依赖安全问题")
 
         # 6. 提示词注入测试 (v3.1 新增)
-        if self.prompt_injection_tester and not target.is_file() and self._should_run_engine("prompt_injection"):
+        # 6. 提示词注入探针 (v3.0 新增)
+        if self.prompt_injection_tester and not target.is_file() and self._should_run_engine("prompt_injection") and not is_self:
             _p("\n📊 步骤 6/8: 提示词注入探针扫描...")
             pi_results = self.prompt_injection_tester.test_skill(target, path_filter=self.path_filter)
+        elif is_self:
+            _p("\n📊 步骤 6/8: 提示词注入探针扫描...（自引用模式：跳过）")
+            pi_results = []
+        else:
+            pi_results = []
             for r in pi_results:
                 all_findings.append({
                     'rule_id': r.probe_id,
@@ -822,9 +859,14 @@ class SkillScanner:
                 _p("   ✅ 未发现提示词注入模式")
 
         # 7. 基线比对 (v3.0 新增)
-        if self.baseline_tracker and not target.is_file() and self._should_run_engine("baseline_change"):
+        if self.baseline_tracker and not target.is_file() and self._should_run_engine("baseline_change") and not is_self:
             _p("\n📊 步骤 7/8: 基线比对 (Rug-Pull 检测)...")
             has_changes, changes = self.baseline_tracker.check_changes(target.name, target)
+        elif is_self:
+            _p("\n📊 步骤 7/8: 基线比对 (Rug-Pull 检测)...（自引用模式：跳过）")
+            has_changes, changes = False, []
+        else:
+            has_changes, changes = False, []
             if has_changes:
                 critical_changes = [c for c in changes if c.severity == 'CRITICAL']
                 high_changes = [c for c in changes if c.severity == 'HIGH']
@@ -1022,7 +1064,7 @@ class SkillScanner:
 
         # ─── v5.0: 跨层关联分析 ──────────────────────────────
         correlation_result = None
-        if all_findings:
+        if all_findings and not is_self:
             try:
                 from correlation_engine import CorrelationEngine
                 corr_engine = CorrelationEngine()
