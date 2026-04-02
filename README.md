@@ -321,6 +321,14 @@ MIT License
 
 ---
 
+## ☕ Sponsor / 赞赏
+
+If this project helps you, consider buying me a coffee! 如果这个项目对你有帮助，欢迎赞赏支持～
+
+![Reward QR Code](assets/reward-qrcode.png)
+
+---
+
 **X Skill Scanner Team** — Your AI skill security guardian 🛡️
 
-*Version: v5.2.0 | Updated: 2026-04-02*
+*Version: v5.3.0 | Updated: 2026-04-02*
