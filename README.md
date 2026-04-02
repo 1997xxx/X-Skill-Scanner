@@ -187,6 +187,55 @@ export OPENAI_MODEL="gpt-4o-mini"
 
 ---
 
+## 🔄 Continuous Protection
+
+X Skill Scanner doesn't just scan on demand — it provides **three layers of continuous protection** to ensure every skill in your environment is audited:
+
+### 1. Pre-Install Auto-Scan (AGENTS.md Injection)
+
+When installed as an OpenClaw skill, the scanner automatically injects security rules into `AGENTS.md`. This means **every skill installation triggers a scan before the skill is installed** — no manual action needed.
+
+```
+User: "Install xxx skill"
+     → Agent auto-scans the skill first
+     → Shows results (SAFE / MEDIUM / EXTREME)
+     → Only installs if risk is acceptable
+```
+
+### 2. Session Startup Check
+
+Every new session automatically checks for newly added or changed skills:
+
+```bash
+# Checks all skill directories for changes since last snapshot
+bash ~/.openclaw/skills/clawhub/scripts/check-skills-change.sh
+```
+
+If new or modified skills are found → automatic full scan with report.
+
+### 3. Daily Scheduled Security Scan (Cron Job)
+
+Set up a daily cron job to proactively audit all installed skills:
+
+```bash
+# Recommended: Daily at 9:00 AM (Asia/Shanghai timezone)
+# Scans all skill directories for unauthorized changes
+# Reports any new findings or baseline deviations
+```
+
+**How to set up via OpenClaw:**
+```
+Agent prompt: "Set up a daily skill security scan at 9 AM"
+```
+
+The cron job will:
+- Run `check-skills-change.sh` to detect modifications
+- Full-scan any new or changed skills
+- Report findings (or HEARTBEAT_OK if nothing changed)
+- Create initial baselines for unknown skills
+
+---
+
 ## 📊 Risk Levels
 
 | Level | Score | Action |
