@@ -101,7 +101,30 @@ Detect the language of the user's triggering message and use that language for t
 
 ## 🚀 首次安装：自动配置（开箱即用）
 
-### Flow 0. 安装后自动注入 AGENTS.md
+### Flow 0. 依赖检查与安装
+
+⚠️ **扫描器运行前，必须确保 Python 依赖已安装。**
+
+```bash
+# 检查 PyYAML 是否可用
+python3 -c "import yaml" 2>/dev/null && echo "deps-ok" || echo "deps-missing"
+```
+
+- 如果输出 `deps-ok` → 跳过，直接执行后续流程
+- 如果输出 `deps-missing` → 自动安装：
+  ```bash
+  pip3 install PyYAML
+  ```
+  或从技能目录安装：
+  ```bash
+  pip3 install -r ~/.openclaw/skills/x-skill-scanner/requirements.txt
+  ```
+
+**注意：** 扫描器仅依赖 `PyYAML`（用于解析 YAML 规则文件），无其他第三方依赖。LLM 功能通过 `urllib` 直接调用 HTTP API，不需要 `openai` / `anthropic` SDK。
+
+---
+
+### Flow 1. 安装后自动注入 AGENTS.md
 
 ⚠️ **当用户安装此技能时，必须自动执行以下配置步骤：**
 
