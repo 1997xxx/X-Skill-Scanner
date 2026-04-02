@@ -1554,7 +1554,8 @@ def main():
         try:
             answer = input("\n是否安装此技能？[y/N]: ").strip().lower()
             if answer in ('y', 'yes'):
-                default_skills_dir = Path.home() / '.openclaw' / 'workspace' / 'skills'
+                from openclaw_config import get_openclaw_home
+                default_skills_dir = get_openclaw_home() / 'workspace' / 'skills'
                 install_dir_str = args.install_to or input(f"安装路径 [默认: {default_skills_dir}]: ").strip()
                 install_dir = Path(install_dir_str) if install_dir_str else default_skills_dir
                 install_dir.mkdir(parents=True, exist_ok=True)

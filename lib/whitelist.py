@@ -11,6 +11,8 @@ from typing import Dict, List, Set, Optional
 from pathlib import Path
 from dataclasses import dataclass, field
 
+from openclaw_config import get_openclaw_home
+
 
 @dataclass
 class WhitelistConfig:
@@ -253,7 +255,7 @@ class WhitelistManager:
         
         target_str = str(target)
         target_name = target.name if hasattr(target, 'name') else ''
-        target_str_normalized = target_str.replace('~', str(Path.home()))
+        target_str_normalized = target_str.replace('~', str(get_openclaw_home()))
         
         # 1. 检查技能名称是否在可信技能列表中
         if target_name in self.config.trusted_skills:
@@ -265,7 +267,7 @@ class WhitelistManager:
         
         # 3. 检查路径模式匹配（需显式配置 safe_paths）
         for safe_path in self.config.safe_paths:
-            safe_path_expanded = safe_path.replace('~', str(Path.home()))
+            safe_path_expanded = safe_path.replace('~', str(get_openclaw_home()))
             if target_str_normalized.startswith(safe_path_expanded):
                 return {'is_whitelisted': True, 'reason': f'Safe path pattern: {safe_path}'}
         

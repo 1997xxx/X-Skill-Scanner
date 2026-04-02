@@ -186,12 +186,11 @@ class LLMReviewer:
         
         # 从 openclaw.json 自动发现
         try:
-            config_path = Path.home() / '.openclaw' / 'openclaw.json'
-            if not config_path.exists():
-                raise FileNotFoundError("openclaw.json not found")
-            
-            with open(config_path, 'r', encoding='utf-8') as f:
-                cfg = json.load(f)
+            from openclaw_config import load_openclaw_config, get_openclaw_config_path
+            cfg = load_openclaw_config()
+            if not cfg:
+                config_path = get_openclaw_config_path()
+                raise FileNotFoundError(f"openclaw.json not found at {config_path}")
             
             providers = cfg.get('models', {}).get('providers', {})
             

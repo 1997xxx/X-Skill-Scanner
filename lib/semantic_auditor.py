@@ -82,10 +82,12 @@ class SemanticAuditor:
 
     def _auto_discover_provider(self):
         try:
-            config_path = Path.home() / '.openclaw' / 'openclaw.json'
-            if not config_path.exists(): return
-            with open(config_path, 'r', encoding='utf-8') as f:
-                cfg = json.load(f)
+            from openclaw_config import load_openclaw_config, get_openclaw_config_path
+            cfg = load_openclaw_config()
+            if not cfg:
+                config_path = get_openclaw_config_path()
+                _p(f"⚠️  无法加载 OpenClaw 配置: {config_path}")
+                return
             providers = cfg.get('models', {}).get('providers', {})
 
             # --- Step 1: Try to match OpenClaw's default agent model ---
@@ -292,7 +294,7 @@ class SemanticAuditor:
             if result is not None: return result
         
         _p("⚠️  未检测到 LLM Provider 配置，跳过语义审计")
-        _p("   提示: 请确保 ~/.openclaw/openclaw.json 中配置了 models.providers")
+        _p("   提示: 请确保 openclaw.json 中配置了 models.providers（支持 OPENCLAW_CONFIG_PATH / OPENCLAW_HOME 环境变量覆盖）")
         return None
 
     def _call_provider(self, prompt, system_prompt, max_tokens, temperature):
