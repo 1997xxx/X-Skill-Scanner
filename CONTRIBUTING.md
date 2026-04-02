@@ -40,4 +40,14 @@ python3 -m pytest tests/ -v
 
 ---
 
+## Contact / 联系方式
+
+- Email: **lbx1997@foxmail.com**
+
+## 赞赏 / Sponsor
+
+如果这个项目对你有帮助，欢迎赞赏支持 ☕️
+
+![赞赏码](assets/reward-qrcode.png)
+
 *X Skill Scanner Team*
