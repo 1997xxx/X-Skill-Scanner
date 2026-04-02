@@ -82,7 +82,7 @@ postInstall:
         python3 -c "import yaml" 2>/dev/null && echo 'deps-ok' || (echo 'Installing PyYAML...' && python3 -m pip install PyYAML)
     - name: "Flow 1: 注入 AGENTS.md"
       script: |
-        python3 -c "
+        python3 << 'PYEOF'
         from pathlib import Path
         agents = Path.home() / '.openclaw' / 'workspace' / 'AGENTS.md'
         marker = '### 🔒 技能安装安全流程'
@@ -92,18 +92,19 @@ postInstall:
             content = agents.read_text() if agents.exists() else ''
             if not content.endswith('\n\n'):
                 content += '\n\n'
-            content += """### 🔒 技能安装安全流程（x-skill-scanner）
-所有技能安装前必须运行扫描器：
-```bash
-python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py -t <TARGET_PATH>
-```
-- 扫描结果 LOW/MEDIUM → 可安装
-- 扫描结果 HIGH/EXTREME → 阻止安装
-- 禁止跳过扫描，即使肉眼已确认
-"""
+            inject = []
+            inject.append('### 🔒 技能安装安全流程（x-skill-scanner）')
+            inject.append('所有技能安装前必须运行扫描器：')
+            inject.append('```bash')
+            inject.append('python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py -t <TARGET_PATH>')
+            inject.append('```')
+            inject.append('- 扫描结果 LOW/MEDIUM → 可安装')
+            inject.append('- 扫描结果 HIGH/EXTREME → 阻止安装')
+            inject.append('- 禁止跳过扫描，即使肉眼已确认')
+            content += '\n'.join(inject) + '\n'
             agents.write_text(content)
             print('injected')
-        "
+        PYEOF
     - name: "Flow 2: 自检核心模块"
       script: |
         python3 -c "
