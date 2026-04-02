@@ -368,7 +368,17 @@ class FPFilter:
             'x-skill-scanner/data/', '/data/', 'data/',
         ])
         
-        if is_security_tool:
+        # v5.2.1: Also detect scanner's own documentation files at project root
+        # These contain IOC examples and attack descriptions for documentation purposes
+        doc_file_patterns = ['CHANGELOG.md', 'README.md', 'README_CH.md', 'SKILL.md']
+        is_own_doc = any(file_path.endswith(p) or file_path == p for p in doc_file_patterns)
+        
+        # Detect if this looks like the scanner's own project directory
+        is_own_project = any(part in file_path for part in [
+            'x-skill-scanner', 'X-Skill-Scanner',
+        ]) and is_own_doc
+        
+        if is_security_tool or is_own_project:
             # 安全工具自身的文件，检查是否只是文档/规则引用
             # 真正的威胁是实际可执行代码，不是字符串中的示例
             
