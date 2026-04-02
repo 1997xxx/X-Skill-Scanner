@@ -18,6 +18,8 @@ import json
 import os
 import re
 import sys
+import urllib.request
+import urllib.error
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -486,9 +488,6 @@ class LLMReviewer:
         """调用 LLM 进行单条审查"""
         provider = self._get_provider_config()
         api_type = provider.get('type', 'openai-chat')
-        
-        import urllib.request
-        import urllib.error
         
         system_prompt = REVIEW_SYSTEM_PROMPT + "\n\n⚠️ IMPORTANT: Your response must be ONLY a valid JSON object. Do NOT include any thinking process, explanation, or text before/after the JSON. Start your response with { and end with }."
         
