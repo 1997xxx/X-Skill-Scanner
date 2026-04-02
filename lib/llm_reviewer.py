@@ -756,12 +756,34 @@ class LLMReviewer:
                 return self._parse_batch_response(text, findings)
 
         except Exception as e:
-            # Fallback: review each finding individually
-            results = []
-            for f in findings:
-                result = self._review_single(f, skill_info, file_tree, target)
-                results.append(result)
-            return results
+            error_msg = str(e)
+            is_api_failure = any(kw in error_msg for kw in [
+                'HTTP Error 5', 'urlopen error', 'Connection',
+                'timeout', 'SSLError', 'CERTIFICATE_VERIFY_FAILED',
+            ])
+            
+            if is_api_failure:
+                # API 不可用 — 不要逐条重试（也会失败），直接返回降级结果
+                severity_order = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
+                results = []
+                for f in findings:
+                    sev = f.get('severity', 'MEDIUM')
+                    results.append(ReviewResult(
+                        original_finding=f,
+                        verdict='UNCERTAIN',
+                        confidence=0.3,
+                        reasoning=f'LLM API 不可用 ({error_msg[:80]})，回退到规则引擎原始判断',
+                        true_severity=sev,
+                        summary=f'LLM API 不可用，维持原始严重度 {sev}',
+                    ))
+                return results
+            else:
+                # 非 API 错误 — 逐条重试
+                results = []
+                for f in findings:
+                    result = self._review_single(f, skill_info, file_tree, target)
+                    results.append(result)
+                return results
 
     def _parse_batch_response(self, content: str, original_findings: List[Dict]) -> List[ReviewResult]:
         """解析批量审查的 LLM 响应"""
@@ -912,16 +934,41 @@ class LLMReviewer:
         except Exception as e:
             import traceback
             tb = traceback.format_exc()
-            print(f"⚠️  LLM review error for {finding.get('rule_id', '?')}: {e}", file=sys.stderr)
+            error_msg = str(e)
+            print(f"⚠️  LLM review error for {finding.get('rule_id', '?')}: {error_msg}", file=sys.stderr)
             print(tb[:500], file=sys.stderr)
-            return ReviewResult(
-                original_finding=finding,
-                verdict='HUMAN_REVIEW',
-                confidence=0.0,
-                reasoning=f'LLM review failed: {str(e)[:200]}',
-                true_severity=None,
-                summary=f'LLM 审查失败: {str(e)[:50]}',
-            )
+            
+            # Detect API-level failures (HTTP 5xx, connection errors, timeout)
+            # vs LLM response parsing issues
+            is_api_failure = any(kw in error_msg for kw in [
+                'HTTP Error 5', 'urlopen error', 'Connection',
+                'timeout', 'SSLError', 'CERTIFICATE_VERIFY_FAILED',
+            ])
+            
+            if is_api_failure:
+                # API 不可用 — 降级为基于规则引擎的保守判断
+                severity = finding.get('severity', 'MEDIUM')
+                source = finding.get('source', 'unknown')
+                # 规则引擎已确认的发现（非 FP 预过滤保留的），API 不可用时保持原样
+                # 但降低置信度，避免过度影响风险分数
+                return ReviewResult(
+                    original_finding=finding,
+                    verdict='UNCERTAIN',
+                    confidence=0.3,
+                    reasoning=f'LLM API 不可用 ({error_msg[:80]})，回退到规则引擎原始判断',
+                    true_severity=severity,
+                    summary=f'LLM API 不可用，维持原始严重度 {severity}',
+                )
+            else:
+                # 非 API 错误（如解析失败）— 需要人工审查
+                return ReviewResult(
+                    original_finding=finding,
+                    verdict='HUMAN_REVIEW',
+                    confidence=0.0,
+                    reasoning=f'LLM review failed: {error_msg[:200]}',
+                    true_severity=None,
+                    summary=f'LLM 审查失败: {error_msg[:50]}',
+                )
 
     def _parse_llm_response(self, content: str) -> Dict:
         """解析 LLM 返回的 JSON 响应"""
