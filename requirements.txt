@@ -1,16 +1,4 @@
-# Ant International Skill Scanner - 依赖清单
-# 安装：pip install -r requirements.txt
+# X Skill Scanner - Dependencies
+# Install: pip install -r requirements.txt
 
-# 核心依赖
-PyYAML>=6.0          # 配置文件解析
-requests>=2.31.0     # HTTP 请求（威胁情报）
-
-# 可选依赖（语义分析）
-# openai>=1.0.0      # OpenAI API
-# anthropic>=0.18.0  # Anthropic API
-
-# 开发依赖
-# pytest>=7.4.0      # 测试框架
-# pytest-cov>=4.1.0  # 测试覆盖率
-# black>=23.0.0      # 代码格式化
-# flake8>=6.1.0      # 代码检查
+PyYAML>=6.0          # YAML rule file parsing (static_rules.yaml, markdown_rules.yaml)
