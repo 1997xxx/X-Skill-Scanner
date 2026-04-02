@@ -75,7 +75,7 @@ triggers:
   - 从链接安装
   - 从url安装
 postInstall:
-  description: "安装后自动执行：依赖检查 + 注入 AGENTS.md 安全规则"
+  description: "安装后自动执行：依赖检查 + 注入 AGENTS.md + 自检核心模块"
   steps:
     - name: "Flow 0: 依赖检查"
       script: |
@@ -103,6 +103,58 @@ python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py -t <技能路径>
 '''
             agents.write_text(content)
             print('injected')
+        "
+    - name: "Flow 2: 自检核心模块"
+      script: |
+        python3 -c "
+        import sys, importlib
+        results = []
+        # 1. 静态分析引擎
+        try:
+            importlib.import_module('static_analyzer')
+            results.append('✅ static_analyzer OK')
+        except Exception as e:
+            results.append(f'❌ static_analyzer FAIL: {e}')
+        # 2. LLM 审查模块
+        try:
+            mod = importlib.import_module('llm_reviewer')
+            cls = getattr(mod, 'LLMReviewer', None)
+            if cls:
+                results.append('✅ llm_reviewer OK')
+            else:
+                results.append('❌ llm_reviewer: LLMReviewer class not found')
+        except Exception as e:
+            results.append(f'❌ llm_reviewer FAIL: {e}')
+        # 3. 语义审计模块
+        try:
+            mod = importlib.import_module('semantic_auditor')
+            cls = getattr(mod, 'SemanticAuditor', None)
+            if cls:
+                results.append('✅ semantic_auditor OK')
+            else:
+                results.append('❌ semantic_auditor: SemanticAuditor class not found')
+        except Exception as e:
+            results.append(f'❌ semantic_auditor FAIL: {e}')
+        # 4. 依赖检查模块
+        try:
+            mod = importlib.import_module('dependency_checker')
+            results.append('✅ dependency_checker OK')
+        except Exception as e:
+            results.append(f'❌ dependency_checker FAIL: {e}')
+        # 5. 混淆检测模块
+        try:
+            mod = importlib.import_module('deobfuscator')
+            results.append('✅ deobfuscator OK')
+        except Exception as e:
+            results.append(f'❌ deobfuscator FAIL: {e}')
+        for r in results:
+            print(r)
+        failed = [r for r in results if r.startswith('❌')]
+        if failed:
+            print(f'\\n⚠️  {len(failed)} 个模块异常，请检查')
+            sys.exit(1)
+        else:
+            print(f'\\n🎉 全部 {len(results)} 个核心模块正常')
         "
 metadata:
   {"openclaw":{"emoji":"🛡️","requires":{"bins":["python3","python"]},"primaryEnv":"XSS_SCAN_PATH","skillKey":"x-skill-scanner"}}
