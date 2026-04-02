@@ -167,13 +167,34 @@ class LLMReviewer:
             pass
         return None, None
 
+    @staticmethod
+    def _infer_api_type(prov_cfg: dict) -> str:
+        """从 provider 配置的 `api` 字段推断 API 类型
+        
+        支持的 api 值:
+        - openai-completions → /v1/completions (prompt 格式)
+        - openai-chat → /v1/chat/completions (messages 格式)
+        - anthropic-messages → Anthropic Messages API
+        - 其他/缺失 → 默认 openai-chat
+        """
+        api_field = prov_cfg.get('api', '')
+        mapping = {
+            'openai-completions': 'openai-completions',
+            'openai-chat': 'openai-chat',
+            'anthropic-messages': 'anthropic-messages',
+        }
+        return mapping.get(api_field, 'openai-chat')
+
     def _get_provider_config(self) -> Dict[str, str]:
         """获取 LLM Provider 配置
         
         优先级：
         1. 环境变量 OPENAI_BASE_URL + OPENAI_API_KEY
-        2. OpenClaw 默认模型对应的 provider（agents.defaults.model.primary）
+        2. OpenClaw 默认模型对应的 provider（agents.defaults.model.primary）— **读取 api 字段**
         3. 遍历所有 provider，取第一个能探测通的
+        
+        返回 dict 包含: url, key, model, type
+        type 的可能值: openai-chat | openai-completions | anthropic-messages
         """
         # 优先使用环境变量
         if os.environ.get('OPENAI_BASE_URL') and os.environ.get('OPENAI_API_KEY'):
@@ -227,16 +248,19 @@ class LLMReviewer:
                     if model_id not in available_ids and available_ids:
                         model_id = available_ids[0]
                     
-                    detected = self._probe_api(base_url, api_key, model_id)
+                    # ✅ 关键修复：读取 api 字段推断正确的 API 类型
+                    api_type = self._infer_api_type(prov_cfg)
+                    
+                    detected = self._probe_api(base_url, api_key, model_id, api_type)
                     if detected:
                         return detected
                     
-                    # 探测失败时 fallback
+                    # 探测失败时 fallback — 仍然使用 api 字段推断的类型
                     return {
                         'url': base_url,
                         'key': api_key,
                         'model': model_id,
-                        'type': 'openai-chat',
+                        'type': api_type,
                     }
             
             # ─── 策略 2: 遍历所有 provider，取第一个能探测通的 ─────
@@ -248,27 +272,35 @@ class LLMReviewer:
                 if api_key and base_url and models_list:
                     model_id = self.model or models_list[0].get('id', '')
                     
-                    detected = self._probe_api(base_url, api_key, model_id)
+                    # ✅ 关键修复：读取 api 字段推断正确的 API 类型
+                    api_type = self._infer_api_type(prov_cfg)
+                    
+                    detected = self._probe_api(base_url, api_key, model_id, api_type)
                     if detected:
                         return detected
                     
-                    # Fallback
+                    # Fallback — 使用 api 字段推断的类型
                     return {
                         'url': base_url,
                         'key': api_key,
                         'model': model_id,
-                        'type': 'openai-chat',
+                        'type': api_type,
                     }
         except Exception as e:
             print(f"⚠️  Provider 自动发现失败: {e}", file=sys.stderr)
         
         raise RuntimeError("无法找到 LLM Provider 配置。请设置 OPENAI_BASE_URL 和 OPENAI_API_KEY 环境变量，或确保 openclaw.json 配置正确。")
 
-    def _probe_api(self, base_url: str, api_key: str, model_id: str) -> Optional[Dict]:
+    def _probe_api(self, base_url: str, api_key: str, model_id: str,
+                    api_type: str = 'openai-chat') -> Optional[Dict]:
         """探测可用的 API 端点
         
-        不仅检查 HTTP 200，还验证响应体是有效的 OpenAI 兼容 JSON（包含 choices 字段）。
-        防止 HTML 跳转页、网关错误页面等被误判为成功。
+        根据 api_type 选择正确的端点和请求格式：
+        - openai-chat → /v1/chat/completions (messages 格式)
+        - openai-completions → /v1/completions (prompt 格式)
+        - anthropic-messages → Anthropic /v1/messages
+        
+        不仅检查 HTTP 200，还验证响应体是有效的 JSON。
         """
         import urllib.request
         import urllib.error
@@ -276,29 +308,37 @@ class LLMReviewer:
         base = base_url.rstrip('/')
         candidates = []
         
-        # 策略 1: baseUrl 已包含 /v1 路径 → 直接追加 /chat/completions
-        # e.g., https://host/api/openai/v1 → https://host/api/openai/v1/chat/completions
-        if '/v1' in base and not base.endswith('/chat/completions'):
-            candidates.append(f'{base}/chat/completions')
-        
-        # 策略 2: baseUrl 包含 /api/ 但不是 v1 风格 → 截断到根 + /v1/chat/completions
-        # e.g., https://host/api/anthropic → https://host/v1/chat/completions
-        if '/api/' in base and '/v1' not in base:
-            root = base[:base.index('/api/')]
-            candidates.append(f'{root}/v1/chat/completions')
-        
-        # 策略 3: 标准模式 — baseUrl 后追加 /v1/chat/completions
-        if not base.endswith('/v1/chat/completions'):
-            candidates.append(f'{base}/v1/chat/completions')
-        
-        # 策略 3.5: 直接在 bare URL 后追加 /chat/completions（无 /v1/）
-        # e.g., https://host/custom-endpoint → https://host/custom-endpoint/chat/completions
-        # 适用于 idealab 等非标准 OpenAI 兼容端点
-        if not base.endswith('/chat/completions'):
-            candidates.append(f'{base}/chat/completions')
-        
-        # 策略 4: 尝试原始 baseUrl（可能已经是完整端点）
-        candidates.append(base)
+        if api_type == 'openai-completions':
+            # Completions 端点探测
+            candidates.append(base)
+            if '/v1' in base and not base.endswith('/completions'):
+                candidates.append(f'{base}/completions')
+            if '/api/' in base and '/v1' not in base:
+                root = base[:base.index('/api/')]
+                candidates.append(f'{root}/v1/completions')
+            if not base.endswith('/v1/completions'):
+                candidates.append(f'{base}/v1/completions')
+            if not base.endswith('/completions'):
+                candidates.append(f'{base}/completions')
+        elif api_type == 'anthropic-messages':
+            # Anthropic Messages 端点探测
+            candidates.append(base)
+            if not base.endswith('/v1/messages'):
+                candidates.append(f'{base}/v1/messages')
+            if not base.endswith('/messages'):
+                candidates.append(f'{base}/messages')
+        else:
+            # openai-chat (默认)
+            candidates.append(base)
+            if '/v1' in base and not base.endswith('/chat/completions'):
+                candidates.append(f'{base}/chat/completions')
+            if '/api/' in base and '/v1' not in base:
+                root = base[:base.index('/api/')]
+                candidates.append(f'{root}/v1/chat/completions')
+            if not base.endswith('/v1/chat/completions'):
+                candidates.append(f'{base}/v1/chat/completions')
+            if not base.endswith('/chat/completions'):
+                candidates.append(f'{base}/chat/completions')
         
         # 去重保序
         seen = set()
@@ -310,19 +350,38 @@ class LLMReviewer:
         
         for url in unique:
             try:
-                payload = json.dumps({
-                    "model": model_id,
-                    "messages": [{"role": "user", "content": "OK"}],
-                    "max_tokens": 5,
-                }).encode()
+                if api_type == 'openai-completions':
+                    payload = json.dumps({
+                        "model": model_id,
+                        "prompt": "OK",
+                        "max_tokens": 5,
+                    }).encode()
+                elif api_type == 'anthropic-messages':
+                    payload = json.dumps({
+                        "model": model_id,
+                        "max_tokens": 5,
+                        "system": "OK",
+                        "messages": [{"role": "user", "content": "OK"}],
+                    }).encode()
+                else:
+                    payload = json.dumps({
+                        "model": model_id,
+                        "messages": [{"role": "user", "content": "OK"}],
+                        "max_tokens": 5,
+                    }).encode()
+                
+                headers = {
+                    'Content-Type': 'application/json',
+                    'Authorization': f'Bearer {api_key}',
+                }
+                if api_type == 'anthropic-messages':
+                    headers['anthropic-version'] = '2023-06-01'
+                    headers['x-api-key'] = api_key
                 
                 req = urllib.request.Request(
                     url,
                     data=payload,
-                    headers={
-                        'Content-Type': 'application/json',
-                        'Authorization': f'Bearer {api_key}',
-                    },
+                    headers=headers,
                     method='POST',
                 )
                 
@@ -330,51 +389,115 @@ class LLMReviewer:
                     if resp.status != 200:
                         continue
                     
-                    # 验证响应体是有效的 OpenAI 兼容 JSON
                     raw = resp.read().decode('utf-8', errors='ignore')
                     body = json.loads(raw)
                     
-                    if isinstance(body, dict) and 'choices' in body:
+                    if isinstance(body, dict) and ('choices' in body or 'content' in body):
                         return {
                             'url': url,
                             'key': api_key,
                             'model': model_id,
-                            'type': 'openai-chat',
+                            'type': api_type,
                         }
             except (json.JSONDecodeError, KeyError, TypeError):
-                # 响应不是有效 JSON 或缺少 choices 字段 → 跳过
                 continue
             except Exception:
                 continue
         
         return None
 
+    def _build_request_payload(self, provider: Dict, system_prompt: str, user_prompt: str) -> tuple:
+        """根据 API 类型构建请求 payload 和 headers
+        
+        Returns: (payload_bytes, headers_dict)
+        """
+        api_type = provider.get('type', 'openai-chat')
+        
+        if api_type == 'openai-completions':
+            # Completions API — 使用 prompt 格式
+            combined = f"{system_prompt}\n\n---\n\n{user_prompt}"
+            payload_data = {
+                "model": provider['model'],
+                "prompt": combined,
+                "temperature": 0.1,
+                "max_tokens": 4000,
+            }
+            headers = {
+                'Content-Type': 'application/json',
+                'Authorization': f'Bearer {provider["key"]}',
+            }
+        elif api_type == 'anthropic-messages':
+            # Anthropic Messages API
+            payload_data = {
+                "model": provider['model'],
+                "max_tokens": 4000,
+                "system": system_prompt,
+                "messages": [{"role": "user", "content": user_prompt}],
+            }
+            headers = {
+                'Content-Type': 'application/json',
+                'x-api-key': provider['key'],
+                'anthropic-version': '2023-06-01',
+            }
+        else:
+            # openai-chat (默认)
+            payload_data = {
+                "model": provider['model'],
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                "temperature": 0.1,
+                "max_tokens": 4000,
+            }
+            headers = {
+                'Content-Type': 'application/json',
+                'Authorization': f'Bearer {provider["key"]}',
+            }
+        
+        return json.dumps(payload_data).encode(), headers
+
+    def _extract_response_text(self, result: dict, api_type: str) -> str:
+        """从 API 响应中提取文本内容"""
+        if api_type == 'anthropic-messages':
+            # Anthropic: {"content": [{"type": "text", "text": "..."}]}
+            content_list = result.get('content', [])
+            if content_list:
+                for item in content_list:
+                    if isinstance(item, dict) and item.get('type') == 'text':
+                        return item.get('text', '')
+            return ''
+        else:
+            # OpenAI compatible (chat & completions): {"choices": [{"message": {...}} | {"text": ...}]}
+            if 'choices' in result and result['choices']:
+                choice = result['choices'][0]
+                # Chat format
+                message = choice.get('message', {})
+                text = message.get('content', '') or message.get('reasoning_content', '')
+                if text:
+                    return text
+                # Completions format
+                text = choice.get('text', '')
+                if text:
+                    return text
+            return ''
+
     def _call_llm(self, user_prompt: str) -> Dict:
         """调用 LLM 进行单条审查"""
         provider = self._get_provider_config()
+        api_type = provider.get('type', 'openai-chat')
         
         import urllib.request
         import urllib.error
         
-        payload_data = {
-            "model": provider['model'],
-            "messages": [
-                {"role": "system", "content": REVIEW_SYSTEM_PROMPT + "\n\n⚠️ IMPORTANT: Your response must be ONLY a valid JSON object. Do NOT include any thinking process, explanation, or text before/after the JSON. Start your response with { and end with }."},
-                {"role": "user", "content": user_prompt},
-            ],
-            "temperature": 0.1,
-            "max_tokens": 4000,
-        }
+        system_prompt = REVIEW_SYSTEM_PROMPT + "\n\n⚠️ IMPORTANT: Your response must be ONLY a valid JSON object. Do NOT include any thinking process, explanation, or text before/after the JSON. Start your response with { and end with }."
         
-        payload = json.dumps(payload_data).encode()
+        payload, headers = self._build_request_payload(provider, system_prompt, user_prompt)
         
         req = urllib.request.Request(
             provider['url'],
             data=payload,
-            headers={
-                'Content-Type': 'application/json',
-                'Authorization': f'Bearer {provider["key"]}',
-            },
+            headers=headers,
             method='POST',
         )
         
@@ -383,16 +506,10 @@ class LLMReviewer:
                 content = resp.read().decode('utf-8')
                 result = json.loads(content)
                 
-                # 提取响应文本
-                if 'choices' in result and result['choices']:
-                    message = result['choices'][0].get('message', {})
-                    # Qwen 系列模型可能把内容放在 reasoning_content
-                    text = message.get('content', '') or message.get('reasoning_content', '')
-                    if not text:
-                        raise ValueError(f"Empty response from LLM. Full message: {str(message)[:300]}")
-                    return self._parse_llm_response(text)
-                else:
-                    raise ValueError(f"Unexpected API response: {str(result)[:200]}")
+                text = self._extract_response_text(result, api_type)
+                if not text:
+                    raise ValueError(f"Empty response from LLM (type={api_type}). Response keys: {list(result.keys())[:10]}")
+                return self._parse_llm_response(text)
         except Exception as e:
             raise RuntimeError(f"LLM API 调用失败: {e}")
 
@@ -617,26 +734,16 @@ class LLMReviewer:
 
         try:
             provider = self._get_provider_config()
-            import urllib.request
-
-            payload_data = {
-                "model": provider['model'],
-                "messages": [
-                    {"role": "system", "content": REVIEW_SYSTEM_PROMPT + "\n\n⚠️ IMPORTANT: Your response must be ONLY a valid JSON array. Do NOT include any thinking process. Start with [ and end with ]."},
-                    {"role": "user", "content": user_prompt},
-                ],
-                "temperature": 0.1,
-                "max_tokens": 4000,
-            }
-
-            payload = json.dumps(payload_data).encode()
+            api_type = provider.get('type', 'openai-chat')
+            
+            system_prompt = REVIEW_SYSTEM_PROMPT + "\n\n⚠️ IMPORTANT: Your response must be ONLY a valid JSON array. Do NOT include any thinking process. Start with [ and end with ]."
+            
+            payload, headers = self._build_request_payload(provider, system_prompt, user_prompt)
+            
             req = urllib.request.Request(
                 provider['url'],
                 data=payload,
-                headers={
-                    'Content-Type': 'application/json',
-                    'Authorization': f'Bearer {provider["key"]}',
-                },
+                headers=headers,
                 method='POST',
             )
 
@@ -644,14 +751,10 @@ class LLMReviewer:
                 content = resp.read().decode('utf-8')
                 result = json.loads(content)
 
-                if 'choices' in result and result['choices']:
-                    message = result['choices'][0].get('message', {})
-                    text = message.get('content', '') or message.get('reasoning_content', '')
-                    if not text:
-                        raise ValueError("Empty response from LLM")
-                    return self._parse_batch_response(text, findings)
-                else:
-                    raise ValueError(f"Unexpected API response: {str(result)[:200]}")
+                text = self._extract_response_text(result, api_type)
+                if not text:
+                    raise ValueError(f"Empty response from LLM (type={api_type})")
+                return self._parse_batch_response(text, findings)
 
         except Exception as e:
             # Fallback: review each finding individually

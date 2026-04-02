@@ -329,16 +329,47 @@ class SemanticAuditor:
         return None
 
     def _call_openai_compat(self, prompt, system_prompt, max_tokens, temperature):
-        messages = []
-        if system_prompt: messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": prompt})
-        payload = {"model": self.provider_model, "messages": messages,
-                   "max_tokens": max_tokens, "temperature": temperature}
+        # ✅ 关键修复：根据 api_type 选择正确的请求格式
+        api_type = getattr(self, 'provider_api_type', 'openai-chat')
         
-        # If provider_url already contains the full endpoint path, use it directly
+        if api_type == 'openai-completions':
+            # Completions API — 使用 prompt 格式（无 messages）
+            combined = ""
+            if system_prompt:
+                combined += system_prompt + "\n\n"
+            combined += prompt
+            payload = {
+                "model": self.provider_model,
+                "prompt": combined,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+            }
+        else:
+            # Chat API (openai-chat) — 使用 messages 格式
+            messages = []
+            if system_prompt: messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": prompt})
+            payload = {
+                "model": self.provider_model,
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+            }
+        
+        # 根据 api_type 选择正确的端点
         url = self.provider_url.rstrip('/')
-        if not (url.endswith('/chat/completions') or url.endswith('/completions')):
-            url = f"{url}/chat/completions"
+        if api_type == 'openai-completions':
+            if not (url.endswith('/completions') or url.endswith('/v1/completions')):
+                if '/v1' in url:
+                    url = f"{url}/completions"
+                else:
+                    url = f"{url}/v1/completions"
+        else:
+            if not (url.endswith('/chat/completions') or url.endswith('/v1/chat/completions')):
+                if '/v1' in url:
+                    url = f"{url}/chat/completions"
+                else:
+                    url = f"{url}/v1/chat/completions"
         
         req = urllib.request.Request(
             url,
@@ -349,22 +380,25 @@ class SemanticAuditor:
             body = json.loads(resp.read().decode('utf-8'))
             choices = body.get('choices', [])
             if choices:
-                msg = choices[0].get('message', {})
-                # Reasoning models put ALL output in reasoning_content
-                # We need to extract structured findings from there
+                choice = choices[0]
+                # Chat format: choices[0].message.content
+                msg = choice.get('message', {})
                 content = msg.get('content', '')
                 reasoning = msg.get('reasoning_content', '')
                 
-                # Try content first (if model outputs JSON directly)
+                # Completions format: choices[0].text
+                text = choice.get('text', '')
+                
+                # Try in order of preference
                 if content.strip():
                     result = self._parse_json(content)
                     if result: return result
-                
-                # Fall back to reasoning_content extraction
+                if text.strip():
+                    result = self._parse_json(text)
+                    if result: return result
                 if reasoning.strip():
                     result = self._parse_json(reasoning)
                     if result: return result
-                    # If reasoning model didn't output JSON, extract structured findings
                     return self._extract_from_reasoning_text(reasoning)
         return None
 

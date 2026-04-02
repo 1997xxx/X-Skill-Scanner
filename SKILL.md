@@ -1,6 +1,6 @@
 ---
 name: x-skill-scanner
-version: 5.2.0
+version: 5.3.0
 author: 吸音
 license: MIT
 description: >
@@ -96,6 +96,31 @@ Detect the language of the user's triggering message and use that language for t
 | English | English throughout |
 | 其他语言 | 匹配该语言 |
 | 无法判断 | 默认使用中文 |
+
+---
+
+## 🚀 快速开始 / Quick Start
+
+### 方式一：一句话安装（推荐）
+
+直接对你的 OpenClaw Agent 说：
+
+```
+安装这个 skill：https://github.com/1997xxx/X-Skill-Scanner/blob/main/SKILL.md
+```
+
+Agent 会自动：
+1. 下载技能到临时目录
+2. **运行安全扫描**（强制流程，不可跳过）
+3. 展示扫描结果
+4. 通过后自动安装到 `~/.openclaw/skills/x-skill-scanner/`
+
+### 方式二：手动克隆
+
+```bash
+git clone https://github.com/1997xxx/X-Skill-Scanner.git ~/.openclaw/skills/x-skill-scanner
+python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py -t <待扫描技能路径>
+```
 
 ---
 
