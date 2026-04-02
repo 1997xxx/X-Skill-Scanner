@@ -83,8 +83,11 @@ BROWSER_THEFT_PATTERNS = [
 ]
 
 # ─── 凭证外传组合模式 ────────────────────────────────────────────
+# v5.4 修复：CRED_EXFIL_001 精确匹配文件路径操作，排除环境变量/API 参数误报
 EXFIL_COMBINATION_PATTERNS = [
-    (r'(?:readFile|open|cat)\s*\(?.*(?:\.env|\.ssh|credentials|secret|token|password)',
+    # 只匹配实际的文件读取操作（open/readFile/cat + 具体文件路径）
+    # 排除 os.environ.get()、API 参数名等误报
+    (r'(?:open|readFile|cat)\s*\(?\s*["\'][^"]*(?:\.env|\.pem|\.key|id_rsa|id_dsa|credentials|\.netrc|\.pgpass)[^"]*["\']',
      'CRITICAL', 'CRED_EXFIL_001',
      '读取敏感凭证文件',
      '检测到代码尝试读取包含敏感信息的文件。'),
