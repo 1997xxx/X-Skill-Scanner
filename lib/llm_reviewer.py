@@ -152,47 +152,12 @@ class LLMReviewer:
         self.model = model or os.environ.get('SCANNER_REVIEW_MODEL', None)
         self._client = None
 
-    def _get_default_model_ref(self, cfg: dict) -> tuple:
-        """从 OpenClaw 配置中提取默认模型的 provider_id 和 model_id
-        
-        返回 (provider_id, model_id) 或 (None, None)
-        """
-        try:
-            agents = cfg.get('agents', {})
-            defaults = agents.get('defaults', {})
-            primary_ref = defaults.get('model', {}).get('primary', '')
-            
-            if '/' in primary_ref:
-                prov_id, model_id = primary_ref.split('/', 1)
-                return prov_id, model_id
-        except Exception:
-            pass
-        return None, None
-
-    @staticmethod
-    def _infer_api_type(prov_cfg: dict) -> str:
-        """从 provider 配置的 `api` 字段推断 API 类型
-        
-        支持的 api 值:
-        - openai-completions → /v1/completions (prompt 格式)
-        - openai-chat → /v1/chat/completions (messages 格式)
-        - anthropic-messages → Anthropic Messages API
-        - 其他/缺失 → 默认 openai-chat
-        """
-        api_field = prov_cfg.get('api', '')
-        mapping = {
-            'openai-completions': 'openai-completions',
-            'openai-chat': 'openai-chat',
-            'anthropic-messages': 'anthropic-messages',
-        }
-        return mapping.get(api_field, 'openai-chat')
-
     def _get_provider_config(self) -> Dict[str, str]:
-        """获取 LLM Provider 配置
+        """获取 LLM Provider 配置（使用共享 llm_provider 模块）
         
         优先级：
         1. 环境变量 OPENAI_BASE_URL + OPENAI_API_KEY
-        2. OpenClaw 默认模型对应的 provider（agents.defaults.model.primary）— **读取 api 字段**
+        2. OpenClaw 默认模型对应的 provider（agents.defaults.model.primary）
         3. 遍历所有 provider，取第一个能探测通的
         
         返回 dict 包含: url, key, model, type
@@ -207,206 +172,13 @@ class LLMReviewer:
                 'type': 'openai-chat',
             }
         
-        # 从 openclaw.json 自动发现
-        try:
-            from openclaw_config import load_openclaw_config, get_openclaw_config_path
-            cfg = load_openclaw_config()
-            if not cfg:
-                config_path = get_openclaw_config_path()
-                raise FileNotFoundError(f"openclaw.json not found at {config_path}")
-            
-            providers = cfg.get('models', {}).get('providers', {})
-            
-            # Build reverse map: model_id -> provider_id (for alias resolution)
-            model_to_prov = {}
-            prov_model_lists = {}
-            for prov_id, prov_cfg in providers.items():
-                models_list = prov_cfg.get('models', [])
-                prov_model_lists[prov_id] = [m.get('id', '') for m in models_list]
-                for mid in prov_model_lists[prov_id]:
-                    model_to_prov[mid] = prov_id
-            
-            # ─── 策略 1: 优先使用 OpenClaw 默认模型对应的 provider ─────
-            default_prov_id, default_model_id = self._get_default_model_ref(cfg)
-            
-            # Cross-provider alias resolution
-            resolved_prov_id = default_prov_id
-            resolved_model_id = default_model_id
-            if default_model_id and default_model_id in model_to_prov:
-                resolved_prov_id = model_to_prov[default_model_id]
-                resolved_model_id = default_model_id
-                if resolved_prov_id != default_prov_id:
-                    print(f"🎯 LLM Reviewer: 跨 provider 匹配默认模型: {resolved_prov_id}/{resolved_model_id}", file=sys.stderr)
-            
-            if resolved_prov_id and resolved_prov_id in providers:
-                prov_cfg = providers[resolved_prov_id]
-                api_key = prov_cfg.get('apiKey')
-                base_url = prov_cfg.get('baseUrl')
-                models_list = prov_cfg.get('models', [])
-                
-                if api_key and base_url and models_list:
-                    model_id = resolved_model_id
-                    available_ids = [m.get('id', '') for m in models_list]
-                    if model_id not in available_ids and available_ids:
-                        model_id = available_ids[0]
-                    
-                    # ✅ 关键修复：读取 api 字段推断正确的 API 类型
-                    api_type = self._infer_api_type(prov_cfg)
-                    
-                    detected = self._probe_api(base_url, api_key, model_id, api_type)
-                    if detected:
-                        return detected
-                    
-                    # 探测失败时 fallback — 仍然使用 api 字段推断的类型
-                    return {
-                        'url': base_url,
-                        'key': api_key,
-                        'model': model_id,
-                        'type': api_type,
-                    }
-            
-            # ─── 策略 2: 遍历所有 provider，取第一个能探测通的 ─────
-            for prov_id, prov_cfg in providers.items():
-                api_key = prov_cfg.get('apiKey')
-                base_url = prov_cfg.get('baseUrl')
-                models_list = prov_cfg.get('models', [])
-                
-                if api_key and base_url and models_list:
-                    model_id = self.model or models_list[0].get('id', '')
-                    
-                    # ✅ 关键修复：读取 api 字段推断正确的 API 类型
-                    api_type = self._infer_api_type(prov_cfg)
-                    
-                    detected = self._probe_api(base_url, api_key, model_id, api_type)
-                    if detected:
-                        return detected
-                    
-                    # Fallback — 使用 api 字段推断的类型
-                    return {
-                        'url': base_url,
-                        'key': api_key,
-                        'model': model_id,
-                        'type': api_type,
-                    }
-        except Exception as e:
-            print(f"⚠️  Provider 自动发现失败: {e}", file=sys.stderr)
+        # 使用共享 provider 发现模块（带缓存，避免重复探测）
+        from llm_provider import get_provider_config
+        config = get_provider_config()
+        if config:
+            return config
         
         raise RuntimeError("无法找到 LLM Provider 配置。请设置 OPENAI_BASE_URL 和 OPENAI_API_KEY 环境变量，或确保 openclaw.json 配置正确。")
-
-    def _probe_api(self, base_url: str, api_key: str, model_id: str,
-                    api_type: str = 'openai-chat') -> Optional[Dict]:
-        """探测可用的 API 端点
-        
-        根据 api_type 选择正确的端点和请求格式：
-        - openai-chat → /v1/chat/completions (messages 格式)
-        - openai-completions → /v1/completions (prompt 格式)
-        - anthropic-messages → Anthropic /v1/messages
-        
-        不仅检查 HTTP 200，还验证响应体是有效的 JSON。
-        """
-        import urllib.request
-        import urllib.error
-        
-        base = base_url.rstrip('/')
-        candidates = []
-        
-        if api_type == 'openai-completions':
-            # Completions 端点探测
-            candidates.append(base)
-            if '/v1' in base and not base.endswith('/completions'):
-                candidates.append(f'{base}/completions')
-            if '/api/' in base and '/v1' not in base:
-                root = base[:base.index('/api/')]
-                candidates.append(f'{root}/v1/completions')
-            if not base.endswith('/v1/completions'):
-                candidates.append(f'{base}/v1/completions')
-            if not base.endswith('/completions'):
-                candidates.append(f'{base}/completions')
-        elif api_type == 'anthropic-messages':
-            # Anthropic Messages 端点探测
-            candidates.append(base)
-            if not base.endswith('/v1/messages'):
-                candidates.append(f'{base}/v1/messages')
-            if not base.endswith('/messages'):
-                candidates.append(f'{base}/messages')
-        else:
-            # openai-chat (默认)
-            candidates.append(base)
-            if '/v1' in base and not base.endswith('/chat/completions'):
-                candidates.append(f'{base}/chat/completions')
-            if '/api/' in base and '/v1' not in base:
-                root = base[:base.index('/api/')]
-                candidates.append(f'{root}/v1/chat/completions')
-            if not base.endswith('/v1/chat/completions'):
-                candidates.append(f'{base}/v1/chat/completions')
-            if not base.endswith('/chat/completions'):
-                candidates.append(f'{base}/chat/completions')
-        
-        # 去重保序
-        seen = set()
-        unique = []
-        for c in candidates:
-            if c not in seen:
-                seen.add(c)
-                unique.append(c)
-        
-        for url in unique:
-            try:
-                if api_type == 'openai-completions':
-                    payload = json.dumps({
-                        "model": model_id,
-                        "prompt": "OK",
-                        "max_tokens": 5,
-                    }).encode()
-                elif api_type == 'anthropic-messages':
-                    payload = json.dumps({
-                        "model": model_id,
-                        "max_tokens": 5,
-                        "system": "OK",
-                        "messages": [{"role": "user", "content": "OK"}],
-                    }).encode()
-                else:
-                    payload = json.dumps({
-                        "model": model_id,
-                        "messages": [{"role": "user", "content": "OK"}],
-                        "max_tokens": 5,
-                    }).encode()
-                
-                headers = {
-                    'Content-Type': 'application/json',
-                    'Authorization': f'Bearer {api_key}',
-                }
-                if api_type == 'anthropic-messages':
-                    headers['anthropic-version'] = '2023-06-01'
-                    headers['x-api-key'] = api_key
-                
-                req = urllib.request.Request(
-                    url,
-                    data=payload,
-                    headers=headers,
-                    method='POST',
-                )
-                
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    if resp.status != 200:
-                        continue
-                    
-                    raw = resp.read().decode('utf-8', errors='ignore')
-                    body = json.loads(raw)
-                    
-                    if isinstance(body, dict) and ('choices' in body or 'content' in body):
-                        return {
-                            'url': url,
-                            'key': api_key,
-                            'model': model_id,
-                            'type': api_type,
-                        }
-            except (json.JSONDecodeError, KeyError, TypeError):
-                continue
-            except Exception:
-                continue
-        
-        return None
 
     def _build_request_payload(self, provider: Dict, system_prompt: str, user_prompt: str) -> tuple:
         """根据 API 类型构建请求 payload 和 headers
