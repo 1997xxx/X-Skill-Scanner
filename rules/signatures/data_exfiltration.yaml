@@ -1,0 +1,73 @@
+# Data Exfiltration Detection Rules
+# 数据外传检测规则 — v5.5 增强版（含可信域名白名单）
+
+- id: EXFIL_001
+  category: data_exfiltration
+  severity: HIGH
+  description: "向外部服务器发送数据"
+  patterns:
+    - "requests\\.(?:post|put|patch)\\("
+    - "fetch\\(.*(?:https?://)"
+    - "urllib\\.request\\.urlopen\\("
+    - "httpx\\.(?:post|get|put|patch)\\("
+    - "subprocess.*(?:curl|wget)"
+  exclude_patterns:
+    - "alibaba-inc\\.com"
+    - "aliyun\\.com"
+    - "antgroup(?:-inc)?\\.cn"
+    - "alipay\\.com"
+    - "dingtalk\\.com"
+    - "localhost|127\\.0\\.0\\.1"
+    - '"pattern"\\s*[:=]'
+    - '"indicator"\\s*[:=]'
+    - 'class\\s+\\w+.*Rule'
+    - 'def\\s+test_'
+  file_types:
+    - python
+    - javascript
+    - typescript
+
+- id: EXFIL_002
+  category: data_exfiltration
+  severity: CRITICAL
+  description: "发送到未知 webhook/隧道服务"
+  patterns:
+    - "webhook\\.site"
+    - "ngrok\\.(?:io|com)"
+    - "localtunnel|lt\\.hs"
+    - "requestbin\\."
+    - "pipedream\\."
+    - "beeceptor\\.com"
+    - "hookbin\\."
+  exclude_patterns:
+    - "^\\s*#"
+    - "^\\s*//"
+    - '"pattern"\\s*[:=]'
+    - '"indicator"\\s*[:=]'
+    - 'class\\s+\\w+.*Rule'
+    - 'def\\s+test_'
+  file_types:
+    - python
+    - javascript
+    - typescript
+    - bash
+
+- id: EXFIL_003
+  category: data_exfiltration
+  severity: HIGH
+  description: "DNS 隧道或非常规数据通道"
+  patterns:
+    - "socket\\.(?:AF_INET|SOCK_DGRAM)"
+    - "dns\\.resolver\\.query"
+    - "base64\\.(?:b64encode|encodebytes).*requests"
+  exclude_patterns:
+    - "^\\s*#"
+    - "^\\s*//"
+    - '"pattern"\\s*[:=]'
+    - 'class\\s+\\w+.*Rule'
+    - 'def\\s+test_'
+    - "^\\s*(?:import|from)\\s+"
+  file_types:
+    - python
+    - javascript
+    - typescript

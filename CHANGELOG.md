@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.5.0] - 2026-04-02
+
+### Added
+- **Plugin Analyzer Architecture** — `BaseAnalyzer` abstract interface for extensible detection engines (reference: CoPaw)
+- **YAML Signature Rules** — Per-category YAML files (`rules/signatures/*.yaml`) with `exclude_patterns` support
+- **Structured Data Models v2** — `models_v2.py` with `dataclass` + Enum (`Severity`, `ThreatCategory`, `SkillFile`, `Finding`, `ScanResult`)
+- **Finding Deduplication** — Automatic dedup by rule_id + file_path + line_number in PatternAnalyzer
+- **Sub-Agent Deep Review** — `--deep-analysis` flag generates structured JSON review tasks for LLM sub-agents via `sessions_spawn`
+- **Trusted Domain Whitelist** — Enterprise domains (alibaba-inc.com, aliyun.com, antgroup.com, etc.) auto-downgrade EXFIL findings
+- **Context-Aware Downgrade Logic** — PatternAnalyzer detects trusted domain + auth patterns to suppress false positives on enterprise API calls
+- **RuleLoader** — YAML rule loading with pre-compiled regex, file type filtering, and exclude pattern support
+
+### Changed
+- **Enterprise API False Positive Fix** — Context-aware suppression for normal enterprise API integrations (env vars + trusted domains + Authorization headers)
+- **threat_intel.py Enhancement** — Added `_is_trusted_domain()`, `_is_env_variable_access()`, and four-tier downgrade strategy
+- **fp_filter.py Enhancement** — Added Pattern #9: enterprise_api_integration with 0.92 confidence
+- **SKILL.md Updated** — Added reference project info (CoPaw + ClawSentry), Flow 4 deep analysis workflow
+
+### Fixed
+- **YAML Parse Errors** — Fixed quote conflicts in regex patterns using proper escaping
+- **Over-broad Trusted Domain Suppression** — Changed from file-level to line-level matching; only suppress when the matched line itself involves trusted domains or variable URLs with auth patterns
+- **Import Path Compatibility** — Added try/except fallback for both package-mode and standalone execution
+
+### Reference Projects
+- **[CoPaw](https://github.com/agentscope-ai/CoPaw)** — Alibaba open-source personal AI assistant; borrowed BaseAnalyzer interface, YAML signatures, ScanPolicy system, data models
+- **ClawSentry** — Volcengine AI Assistant Security for OpenClaw; borrowed前置 security filtering, behavioral audit concepts, multi-layer defense philosophy
+
 ## [5.2.0] - 2026-04-02
 
 ### Added

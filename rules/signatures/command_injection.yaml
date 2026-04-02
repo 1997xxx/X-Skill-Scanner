@@ -1,0 +1,72 @@
+# Command Injection & Code Execution Rules
+# 命令注入和代码执行检测规则 — v5.5 增强版
+
+- id: CMD_001
+  category: command_injection
+  severity: CRITICAL
+  description: "动态代码执行 (eval/exec)"
+  patterns:
+    - "\\beval\\s*\\("
+    - "\\bexec\\s*\\("
+    - "Function\\s*\\("
+    - "new\\s+Function\\s*\\("
+  exclude_patterns:
+    - "^\\s*#"
+    - "^\\s*//"
+    - '"pattern"\\s*[:=]'
+    - '"indicator"\\s*[:=]'
+    - 'class\\s+\\w+.*Rule'
+    - 'def\\s+test_'
+    - '["\x27]eval["\x27]'
+    - '["\x27]exec["\x27]'
+    - "os\\.exec[a-z]+\\("
+  file_types:
+    - python
+    - javascript
+    - typescript
+
+- id: CMD_002
+  category: command_injection
+  severity: HIGH
+  description: "子进程执行外部命令"
+  patterns:
+    - "subprocess\\.(?:run|call|Popen|check_output)"
+    - "os\\.system\\s*\\("
+    - "os\\.popen\\s*\\("
+    - "child_process\\.(?:exec|spawn|fork)"
+  exclude_patterns:
+    - "^\\s*#"
+    - "^\\s*//"
+    - '"pattern"\\s*[:=]'
+    - 'class\\s+\\w+.*Rule'
+    - 'def\\s+test_'
+    - "shell\\s*=\\s*False"
+    - "subprocess\\.run\\s*\\(\\s*\\["
+  file_types:
+    - python
+    - javascript
+    - typescript
+
+- id: CMD_003
+  category: command_injection
+  severity: CRITICAL
+  description: "反向 Shell 或持久化后门"
+  patterns:
+    - "/bin/(?:ba)?sh\\s+-i"
+    - "nc\\s+-[el]+"
+    - "bash\\s+-c.*(?:/dev/tcp|/dev/udp)"
+    - "mkfifo\\s+/tmp/"
+    - "python.*pty\\.spawn"
+    - "perl\\s+-e.*socket"
+  exclude_patterns:
+    - "^\\s*#"
+    - "^\\s*//"
+    - '"pattern"\\s*[:=]'
+    - '"indicator"\\s*[:=]'
+    - 'class\\s+\\w+.*Rule'
+    - 'def\\s+test_'
+  file_types:
+    - python
+    - javascript
+    - typescript
+    - bash

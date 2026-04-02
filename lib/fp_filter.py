@@ -249,6 +249,25 @@ FALSE_POSITIVE_PATTERNS = [
         },
         'confidence': 0.85,
     },
+
+    # 9. 【v5.3】企业 API 集成（环境变量 + 可信域名）
+    {
+        'name': 'enterprise_api_integration',
+        'description': '正常的企业 API 调用：凭证从环境变量读取，发送到可信企业域名',
+        'conditions': {
+            'file_patterns': [r'.*\.py$', r'.*\.js$', r'.*\.ts$'],
+            'content_patterns': [
+                # 环境变量读取 + 企业域名的组合
+                r'(?:os\.environ|process\.env|getenv).*?(?:alibaba-inc|aliyun|antgroup|alipay)',
+                r'(?:alibaba-inc|aliyun|antgroup|alipay).*(?:os\.environ|process\.env|getenv)',
+                # 标准的 API 认证模式
+                r'(?:Authorization|access_token|api_key).*?(?:alibaba-inc|aliyun|antgroup)',
+                r'(?:alibaba-inc|aliyun|antgroup).*(?:Authorization|access_token|api_key)',
+            ],
+            'context_required': True,  # 需要同时匹配文件和内容
+        },
+        'confidence': 0.92,
+    },
 ]
 
 # ─── 真实威胁模式（不应被过滤）──────────────────────────────────

@@ -121,6 +121,38 @@ class ThreatIntelligence:
         """获取所有攻击模式"""
         return self.intel_data.get('attack_patterns', {})
     
+    # ── Trusted Enterprise Domains ───────────────────────────────
+    TRUSTED_DOMAINS = [
+        'alibaba-inc.com', 'aliyun.com', 'antgroup.com', 'antgroup-inc.cn',
+        'alipay.com', 'taobao.com', 'tmall.com', 'dingtalk.com',
+        'googleapis.com', 'github.com', 'api.github.com',
+        'openai.com', 'api.openai.com', 'anthropic.com',
+        'amazonaws.com', 'azure.com', 'microsoft.com',
+        'localhost', '127.0.0.1', '0.0.0.0',
+    ]
+
+    @classmethod
+    def _is_trusted_domain(cls, line: str) -> bool:
+        """检查一行中是否包含可信企业域名"""
+        line_lower = line.lower()
+        return any(domain in line_lower for domain in cls.TRUSTED_DOMAINS)
+
+    @classmethod
+    def _is_env_variable_access(cls, line: str) -> bool:
+        """检查是否是安全的环境变量读取操作"""
+        stripped = line.strip()
+        safe_patterns = [
+            r'os\.environ\.get\(',      # Python: os.environ.get('TOKEN')
+            r'os\.environ\[',             # Python: os.environ['TOKEN']
+            r'process\.env\.',            # Node: process.env.TOKEN
+            r'getenv\(',                  # C/Python: getenv('TOKEN')
+            r'get_env\(',                 # Rust: std::env::var
+            r'System\.getenv',            # Java: System.getenv()
+            r'ENV\[',                     # Ruby: ENV['TOKEN']
+            r'config\.from_env',          # Common config pattern
+        ]
+        return any(re.search(p, stripped) for p in safe_patterns)
+
     @staticmethod
     def _is_rule_definition_line(line: str) -> bool:
         """判断一行是否处于规则定义上下文中（非实际恶意行为）"""
@@ -132,17 +164,23 @@ class ThreatIntelligence:
             r'rules\s*:', r'-\s*cwe\s*:',
             r'THREAT_PATTERNS', r'attack_patterns',
             r'r["\']',           # raw string regex literal
+            r'class\s+\w+.*Rule',  # Rule class definitions
+            r'def\s+test_',       # Test functions
         ]
         return any(re.search(m, stripped, re.IGNORECASE) for m in markers)
 
-    @staticmethod
-    def _is_non_executable_context(line: str) -> bool:
+    @classmethod
+    def _is_non_executable_context(cls, line: str) -> bool:
         """
         判断一行是否处于非可执行上下文中。
         包括：UI 标签、描述字符串、Markdown 内容等。
         这些上下文中的关键词通常只是说明性文字，不代表实际恶意行为。
         """
         stripped = line.strip()
+        
+        # 0. 【新增】可信企业域名 + 环境变量读取 → 安全上下文
+        if cls._is_trusted_domain(stripped) and cls._is_env_variable_access(stripped):
+            return True  # e.g., token from env sent to alibaba-inc.com
         
         # 1. 注释行
         if stripped.startswith('#') or stripped.startswith('//'):
@@ -181,6 +219,13 @@ class ThreatIntelligence:
         if "'risk':" in stripped or "'fix_cmd':" in stripped or "'required':" in stripped:
             return True
         
+        # 6. 【新增】正常的数据访问模式（dict.get() 用于配置提取）
+        # e.g., json.loads(token).get('fbi_app_secret', '')
+        if re.search(r'\.get\([\'"]\w+_?(?:secret|token|key|api)[\'"]', stripped):
+            # 如果是从已解析的 JSON/dict 中提取字段，不是凭证收集
+            if any(ctx in stripped for ctx in ['json.loads', 'json.load', 'yaml.load', 'config[', 'data[']):
+                return True
+        
         return False
 
     @staticmethod
@@ -196,7 +241,10 @@ class ThreatIntelligence:
 
     def check_code_patterns(self, code: str, file_path=None) -> List[Dict]:
         """
-        检查代码是否匹配已知攻击模式 — 增强版：排除规则定义/JSON数据/Shell注释
+        检查代码是否匹配已知攻击模式 — v5.3 增强版：
+        - 排除规则定义/JSON数据/Shell注释
+        - 可信域名 + 环境变量读取 → 自动降级为 INFO
+        - 正常 dict.get() 配置提取不标记
         
         Args:
             code: 源代码内容
@@ -227,6 +275,11 @@ class ThreatIntelligence:
             fp = Path(file_path) if not isinstance(file_path, Path) else file_path
             is_shell = fp.suffix.lower() in ('.sh', '.bash', '.zsh')
         
+        # 【v5.3】全局可信域检测：如果整个文件中包含可信企业域名，降低误报敏感度
+        has_trusted_domain = any(
+            self._is_trusted_domain(line) for line in lines
+        )
+        
         for pattern_id, pattern_info in patterns.items():
             indicators = pattern_info.get('indicators', [])
             severity = pattern_info.get('severity', 'HIGH')
@@ -235,6 +288,8 @@ class ThreatIntelligence:
                 try:
                     escaped = re.escape(indicator)
                     found_real_usage = False
+                    matched_line = ''
+                    matched_stripped = ''
                     for line in lines:
                         stripped = line.strip()
                         
@@ -252,15 +307,54 @@ class ThreatIntelligence:
                         
                         if re.search(escaped, line, re.IGNORECASE):
                             found_real_usage = True
+                            matched_line = line
+                            matched_stripped = stripped
                             break
                     
                     if found_real_usage:
-                        matches.append({
+                        # 【v5.3】上下文感知降级
+                        effective_severity = severity
+                        downgrade_reason = None
+                        
+                        # 规则 A: 可信域名 + 环境变量读取 → 安全上下文
+                        if has_trusted_domain and self._is_env_variable_access(matched_stripped):
+                            effective_severity = 'INFO'
+                            downgrade_reason = 'trusted_domain_with_env_access'
+                        
+                        # 规则 B: 单独的可信域名 → 降级外传类检测
+                        elif has_trusted_domain and pattern_id in ('config_exfiltration', 'credential_harvesting', 'webhook_exfiltration'):
+                            effective_severity = 'INFO'
+                            downgrade_reason = 'trusted_domain_context'
+                        
+                        # 规则 C: 正常的 dict.get() 配置提取
+                        elif re.search(r'\.get\([\'"]\w+_?(?:secret|token|key|api|id)[\'"]', matched_stripped):
+                            if any(ctx in matched_stripped for ctx in ['json.loads', 'json.load', 'yaml.safe_load', 'config[', 'data[', 'response[']):
+                                effective_severity = 'INFO'
+                                downgrade_reason = 'safe_config_extraction'
+                        
+                        # 规则 D: 单独的 `.env` / `token` / `secret` 关键词太宽泛
+                        # 仅当没有其他安全上下文时才保留原始严重度
+                        elif indicator in ('.env', 'password', 'secret', 'token', 'API_KEY'):
+                            # 这些单关键词太容易误报，需要额外证据
+                            # 检查是否有真正的恶意行为（文件读取 + 网络发送组合）
+                            has_file_read = any(re.search(r'(?:open|readFile|cat|fs\.read)', l) for l in lines)
+                            has_net_send = any(re.search(r'(?:requests\.|fetch\(|urllib|httpx|curl|wget)', l) for l in lines)
+                            if not (has_file_read and has_net_send):
+                                # 只有单个关键词，没有完整攻击链 → 降级
+                                effective_severity = 'MEDIUM' if severity in ('CRITICAL', 'HIGH') else severity
+                                downgrade_reason = 'broad_indicator_no_attack_chain'
+                        
+                        match_info = {
                             'pattern_id': pattern_id,
                             'description': pattern_info.get('description', ''),
                             'indicator': indicator,
-                            'severity': severity
-                        })
+                            'severity': effective_severity,
+                            'original_severity': severity,
+                        }
+                        if downgrade_reason:
+                            match_info['downgrade_reason'] = downgrade_reason
+                        
+                        matches.append(match_info)
                         break  # One match per pattern is enough
                 except re.error:
                     continue

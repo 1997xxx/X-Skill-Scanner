@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-v5.2.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v5.5.0-blue.svg)](CHANGELOG.md)
 [![GitHub Stars](https://img.shields.io/github/stars/1997xxx/X-Skill-Scanner?style=social)](https://github.com/1997xxx/X-Skill-Scanner)
 
 📖 [English README →](README.md)
@@ -284,6 +284,15 @@ bash ~/.openclaw/skills/clawhub/scripts/check-skills-change.sh
 
 ## 🆕 版本亮点
 
+### v5.5.0 (2026-04-02) — 架构升级
+- 🔌 **插件化分析器架构** — `BaseAnalyzer` 接口，支持独立注册和扩展检测引擎（参考 CoPaw）
+- 📝 **YAML 签名规则** — 按类别分离的 YAML 文件，支持 `exclude_patterns` 排除模式
+- 🏢 **企业 API 误报修复** — 可信域名白名单（alibaba-inc.com、aliyun.com 等）+ 上下文感知降级
+- 📊 **结构化数据模型** — `dataclass` + Enum（`Severity`、`ThreatCategory`）类型安全
+- 🔁 **发现去重** — 按 rule_id + file_path + line_number 自动去重
+- 🧠 **子 Agent 深度审查** — `--deep-analysis` 参数生成结构化审查任务供 LLM 子 Agent 使用
+- 🛡️ **参考项目：** CoPaw（阿里巴巴开源 AI 助理）+ ClawSentry（火山引擎 AI 安全防护）
+
 ### v5.2.0 (2026-04-02)
 - 🚨 **解码恶意载荷** — 报告顶部醒目展示完整还原的恶意命令
 - 🔓 **多层去混淆** — Hex 数组重组、Base64 bytes literal 检测、字符串拼接还原
@@ -323,4 +332,4 @@ MIT License
 
 **X Skill Scanner Team** — 你的 AI 技能安全卫士 🛡️
 
-*版本：v5.2.0 | 更新日期：2026-04-02*
+*版本：v5.5.0 | 更新日期：2026-04-02*

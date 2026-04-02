@@ -1,11 +1,12 @@
 ---
 name: x-skill-scanner
-version: 5.3.0
+version: 5.5.0
 author: 吸音
 license: MIT
 description: >
-  X Skill Scanner — 企业级 AI Agent 技能安全扫描器（技能画像 + 自适应扫描 + 误报预过滤 + LLM 二次审查）
-  Enterprise-grade AI Agent skill security scanner with skill profiling, adaptive scanning, FP pre-filter, and LLM review.
+  X Skill Scanner v5.5 — 企业级 AI Agent 技能安全扫描器
+  架构升级：BaseAnalyzer 插件接口 + YAML 签名规则 + ScanPolicy 策略系统 + 子 Agent 深度审查
+  Enterprise-grade AI Agent skill security scanner with plugin architecture, YAML signatures, policy system, and sub-agent deep review.
   Runs locally via built-in exec + Python script. No external service required.
   Triggers on: scan skill, audit skill, check skill security, 扫描技能, 安全检查技能, 审计AI技能, 安装技能, install skill, clawhub install, add skill, download skill, 下载技能, 安装skill, 新技能.
   IMPORTANT: Always auto-scan before installing any new skill. When user mentions installing/downloading/adding a skill, run scanner FIRST, then present results before proceeding.
@@ -433,6 +434,60 @@ python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py --url <skill-url>
 
 ---
 
+### 4. 深度审查（子 Agent）→ `--deep-analysis` + `sessions_spawn`
+
+**触发条件 / Trigger:** 基础扫描结果风险等级 ≥ HIGH
+
+⚠️ **当扫描结果为 HIGH 或 EXTREME 时，自动启动此流程。不要只展示扫描结果就结束。**
+
+#### 工作流程
+
+1. **运行带 `--deep-analysis` 的扫描：**
+   ```bash
+   python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py -t <skill-path> --deep-analysis
+   ```
+   扫描器会生成一个深度审查任务 JSON 文件，路径在输出中显示。
+
+2. **读取审查任务文件：**
+   ```bash
+   cat ~/.openclaw/skills/x-skill-scanner/reports/<skill-name>-deep-review.json
+   ```
+
+3. **Spawn 子 Agent 进行深度审查：**
+   使用 `sessions_spawn` 工具，将 JSON 中的 `task` 字段作为 task 参数：
+   ```
+   sessions_spawn(
+     task="<从 deep-review.json 中读取的 task 内容>",
+     label="Security Review: <技能名>",
+     model="idealab-qwen3.6-plus-preview",
+     thinking="on",
+     mode="run"
+   )
+   ```
+
+4. **等待并整合结果：**
+   子 Agent 完成后会返回 JSON 格式的最终判断（FALSE_POSITIVE / TRUE_POSITIVE / UNCERTAIN）。
+   将子 Agent 的结论与初步扫描结果整合，给出最终建议。
+
+#### 为什么需要子 Agent？
+
+| 场景 | 基础扫描 | 子 Agent 深度审查 |
+|------|---------|-----------------|
+| 环境变量读取凭证 | ❌ 标记为凭证窃取 | ✅ 识别为安全实践 |
+| 发送到企业内网 | ❌ 标记为数据外传 | ✅ 识别为可信域名 |
+| 规则定义行匹配 | ❌ 误报 | ✅ 识别为非可执行代码 |
+| 真正恶意混淆 | ✅ 检测到 | ✅ 确认并详细分析 |
+
+- When base scan result is HIGH or EXTREME:
+1. Run scanner with `--deep-analysis` flag
+2. Read the generated deep-review.json file
+3. Spawn a sub-agent using `sessions_spawn` with the task content
+4. Wait for completion and integrate results into final recommendation
+
+**关键规则：HIGH/EXTREME 扫描结果必须经过子 Agent 二次确认，除非子 Agent 不可用则人工审查。**
+
+---
+
 ## 防护覆盖矩阵 / Protection Coverage Matrix
 
 | 攻击场景 | 防御机制 | 状态 |
@@ -447,6 +502,8 @@ python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py --url <skill-url>
 | 非标准路径 (workspace/skills/) | 变更检测覆盖所有 skills 目录 | ✅ |
 | 外部脚本/依赖投毒 | 完整扫描模式（含语义审计） | ✅ |
 | 社交工程（"这是我写的，信我"） | 红线拒绝，无例外 | ✅ |
+| HIGH/EXTREME 误报过滤 | 子 Agent 深度审查 + 上下文分析 | ✅ |
+| LLM API 不可用时降级 | 保留原始严重度，标记 UNCERTAIN | ✅ |
 
 ---
 
@@ -461,27 +518,43 @@ python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py --url <skill-url>
 
 ---
 
-## 架构升级 / Architecture Upgrade (v5.0)
+## 架构升级 / Architecture Upgrade (v5.5)
 
-**v4.1 → v5.0 核心改进：**
+**v5.4 → v5.5 核心改进（参考 CoPaw + ClawSentry）：**
 
-| 改进项 | v4.1 | v5.0 |
+| 改进项 | v5.4 | v5.5 |
 |-------|------|------|
-| 扫描策略 | 固定 12 层全跑 | 画像驱动：quick(3)/standard(12)/full(12) |
-| LLM 审查 | 逐条调用 (N 次) | 按文件分组批量审查 (~N/5 次) |
-| 攻击链检测 | ❌ 无 | ✅ 6 种多阶段攻击链 |
-| 风险评分 | 简单累加 | 跨层叠加 + 关联加成 |
-| API 调用次数 | 高 | 减少 **70%+** |
+| 分析器架构 | 单体 scanner.py 硬编码所有层 | `BaseAnalyzer` 插件接口，可独立注册/扩展 |
+| 规则格式 | JSON 单文件 (`threat_intel.json`) | YAML 签名文件（按类别分离，支持排除模式） |
+| 误报控制 | 基础上下文过滤 | 可信域名白名单 + 企业 API 识别 + exclude_patterns |
+| 数据模型 | 松散 dict | `dataclass` + Enum（Severity, ThreatCategory） |
+| 去重机制 | ❌ 无 | Finding ID 去重（rule_id + file_path + line_number） |
 
-**新增模块：**
-- `lib/correlation_engine.py` — 跨层关联分析（6 种攻击链 + 多引擎交叉确认）
-- `lib/skill_profiler.py` — 技能画像引擎（信任评分 + 策略推荐）
-- `lib/fp_filter.py` — 误报预过滤器（8 类误报模式 + 5 类真实威胁指标）
+### 📚 参考项目
 
-**设计原则：**
-- 安全工具自引用 → 自动标记 FP（规则定义、IOC 列表、探针文本）
-- 真实恶意代码 → 全部保留（外传、凭证窃取、反向 Shell、混淆执行）
-- 不确定 → 交给 LLM 二次审查
+本技能的 v5.5 架构升级参考了以下两个开源/企业级安全项目：
+
+#### [CoPaw](https://github.com/agentscope-ai/CoPaw) — 阿里巴巴开源生态的个人 AI 助理
+
+> 技能扫描器在技能被启用或安装前自动扫描安全威胁，检测命令注入、数据外泄、硬编码密钥、社会工程等风险模式，保护系统免受恶意技能影响。
+
+借鉴的核心设计：
+- **`BaseAnalyzer` 抽象接口** — 每个分析器实现统一的 `analyze()` 方法，可独立注册
+- **YAML 签名规则** — 每条规则包含 `patterns` + `exclude_patterns` + `file_types`
+- **`ScanPolicy` 策略系统** — severity_override、disabled_rules、file_classification
+- **`SkillFile` / `Finding` / `ScanResult` 数据模型** — dataclass + Enum 类型安全
+- **文件发现安全加固** — 符号链接保护 + 路径遍历防护 + 大小限制
+- **Finding 去重** — 按 rule_id + file_path + line_number 去重
+
+#### ClawSentry — 火山引擎 AI Assistant Security（面向 OpenClaw 场景深度定制）
+
+> 通过前置的安全过滤与行为审计能力，重点防御提示词注入、数据泄露、高危操作和恶意 Skill 执行等安全风险。在保障 AI 助手稳定运行的基础上，协助治理 AI 交互链路中的异常行为与合规风险，帮助抵御内外部安全威胁。
+
+借鉴的设计理念：
+- **前置安全过滤** — 在技能执行前拦截风险（对应我们的安装时强制扫描流程）
+- **行为审计** — 对 AI 交互链路进行合规检查（对应我们的语义审计 + LLM 审查层）
+- **多层防御** — 从提示词注入到恶意执行的全链路防护（对应我们的十二层管线）
+- **稳定运行优先** — 安全防护不应阻断正常功能（对应我们的精准降级策略，不误杀企业 API）
 
 ## 十二层防御管线 / Twelve-Layer Defense Pipeline
 

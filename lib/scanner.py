@@ -18,6 +18,7 @@ import argparse
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional
+from dataclasses import dataclass, asdict
 from dataclasses import asdict
 
 
@@ -1339,6 +1340,174 @@ def _sarif_level(severity: str) -> str:
     return mapping.get(severity, 'warning')
 
 
+# ─── Deep Analysis Review Task Builder ────────────────────────
+def _build_deep_review_task(target_path: str, scan_result: Dict) -> Dict:
+    """
+    构造子 Agent 深度审查任务。
+    
+    当扫描结果为 HIGH/EXTREME 时，此函数生成一个结构化的 JSON 报告，
+    包含所有关键发现和相关代码片段，供子 Agent 做最终误报/真实威胁判断。
+    
+    Returns:
+        dict — 可直接作为 sessions_spawn task 参数的 JSON 对象
+    """
+    target = Path(target_path)
+    risk_level = scan_result.get('risk_level', 'UNKNOWN')
+    risk_score = scan_result.get('risk_score', 0)
+    findings = scan_result.get('findings', [])
+    
+    # 提取高风险发现
+    high_findings = [f for f in findings if f.get('severity', '').upper() in ('CRITICAL', 'HIGH')]
+    
+    # 读取关键文件内容（限制大小避免 token 爆炸）
+    code_contexts = []
+    max_file_size = 8192  # 每个文件最大 8KB
+    
+    # 优先读取有问题的文件
+    seen_files = set()
+    for finding in high_findings[:10]:  # 最多取前 10 个高危发现
+        file_path = finding.get('file_path', '') or finding.get('file', '')
+        if not file_path or file_path in seen_files:
+            continue
+        seen_files.add(file_path)
+        
+        fp = Path(file_path)
+        if fp.exists() and fp.is_file():
+            try:
+                content = fp.read_text(encoding='utf-8', errors='replace')
+                if len(content) > max_file_size:
+                    # 截取发现问题附近的代码
+                    line_num = finding.get('line', 0)
+                    if line_num > 0:
+                        lines = content.split('\n')
+                        start = max(0, line_num - 20)
+                        end = min(len(lines), line_num + 20)
+                        content = '\n'.join(lines[start:end])
+                        content = f'... (truncated, showing lines {start+1}-{end}) ...\n' + content
+                    else:
+                        content = content[:max_file_size] + '\n... (truncated)'
+                
+                rel_path = str(fp.relative_to(target)) if str(fp).startswith(str(target)) else file_path
+                code_contexts.append({
+                    'file': rel_path,
+                    'content': content,
+                    'finding_ref': finding.get('rule_id', finding.get('pattern_id', '')),
+                    'line': finding.get('line', 0),
+                })
+            except Exception as e:
+                code_contexts.append({
+                    'file': file_path,
+                    'content': f'[无法读取: {e}]',
+                })
+    
+    # 如果没有找到具体文件，读取技能目录下的主要文件
+    if not code_contexts and target.is_dir():
+        for fname in ['SKILL.md', 'main.py', 'index.js', '__init__.py', 'app.py']:
+            fp = target / fname
+            if fp.exists():
+                try:
+                    content = fp.read_text(encoding='utf-8', errors='replace')
+                    if len(content) > max_file_size:
+                        content = content[:max_file_size] + '\n... (truncated)'
+                    code_contexts.append({'file': fname, 'content': content})
+                except Exception:
+                    pass
+    
+    # 格式化发现摘要
+    findings_summary = []
+    for f in high_findings[:10]:
+        findings_summary.append({
+            'rule_id': f.get('rule_id', f.get('pattern_id', 'N/A')),
+            'severity': f.get('severity', 'UNKNOWN'),
+            'description': f.get('description', ''),
+            'file': f.get('file_path', f.get('file', 'N/A')),
+            'line': f.get('line', 0),
+            'matched_code': f.get('matched_code', f.get('indicator', '')),
+        })
+    
+    task_prompt = f"""🔒 技能安全深度审查任务
+
+## 背景
+扫描器对技能 `{target.name}` 进行了初步扫描，发现高风险问题。
+需要你作为资深安全工程师进行人工审查，判断是否为误报。
+
+## 初步扫描结果
+- 风险等级：{risk_level}
+- 风险分数：{risk_score}/100
+- 高风险发现数量：{len(high_findings)}
+
+## 关键发现
+{json.dumps(findings_summary, indent=2, ensure_ascii=False)}
+
+## 完整代码上下文
+以下是被标记为有问题的文件的完整代码。请仔细阅读并判断每个发现的真实性。
+
+"""
+    
+    for ctx in code_contexts:
+        task_prompt += f"\n### 文件: {ctx['file']}\n"
+        if ctx.get('finding_ref'):
+            task_prompt += f"关联规则: {ctx['finding_ref']}"
+        if ctx.get('line'):
+            task_prompt += f" (第 {ctx['line']} 行附近)"
+        task_prompt += f"\n```\n{ctx['content']}\n```\n"
+    
+    task_prompt += """
+## 审查标准
+
+### ✅ 判断为误报（FALSE_POSITIVE）的条件
+1. 凭证从环境变量读取（`os.environ.get()`、`process.env`），不是硬编码
+2. 发送到企业内网可信域名（如 `alibaba-inc.com`, `aliyun.com`, `antgroup-inc.cn`）
+3. 是正常的 API 认证流程，没有额外的凭证窃取行为
+4. 没有混淆、动态执行、反向 Shell 等恶意特征
+5. 威胁情报匹配的是规则定义行或文档字符串，不是实际可执行代码
+6. `.get('token')` / `.get('secret')` 是正常的数据访问模式，非凭证收集
+
+### ⛔ 判断为真实威胁（TRUE_POSITIVE）的条件
+1. 硬编码凭证在代码中（API key、password、secret 直接写在源码里）
+2. 发送到未知外部服务器或 IP 地址（非企业可信域名）
+3. 读取 SSH 密钥、浏览器 Cookie、系统凭证文件（Keychain、Credential Manager）
+4. 使用 eval/exec/subprocess 执行动态生成的代码
+5. 有社会工程学攻击（钓鱼提示、伪造系统对话框）
+6. Base64/Hex 编码后执行的 payload
+7. 反向 Shell 或持久化后门
+
+## 输出格式
+
+请输出以下 JSON 格式的最终判断：
+
+```json
+{
+  "verdict": "FALSE_POSITIVE" | "TRUE_POSITIVE" | "UNCERTAIN",
+  "confidence": "HIGH" | "MEDIUM" | "LOW",
+  "risk_level_override": "LOW" | "MEDIUM" | "HIGH" | "EXTREME" | null,
+  "analysis": {
+    "credential_source": "描述凭证来源（环境变量/硬编码/不存在的）",
+    "network_targets": ["列出所有网络请求目标域名/IP"],
+    "trusted_domains": ["识别出的可信企业域名"],
+    "suspicious_patterns": ["真正可疑的模式，如果没有则空数组"],
+    "fp_explanations": ["对每个误报发现的解释"]
+  },
+  "recommendation": "可安全安装" | "需要进一步调查" | "阻止安装",
+  "reasoning": "详细的分析过程和理由"
+}
+```
+"""
+    
+    return {
+        "task": task_prompt,
+        "metadata": {
+            "skill_name": target.name,
+            "scan_risk_level": risk_level,
+            "scan_risk_score": risk_score,
+            "high_finding_count": len(high_findings),
+            "total_finding_count": len(findings),
+            "code_context_files": len(code_contexts),
+            "scanner_version": "5.3.0",
+        }
+    }
+
+
 # ─── CLI 入口 ──────────────────────────────────────────────────
 def main():
     """命令行入口"""
@@ -1401,6 +1570,7 @@ def main():
     parser.add_argument('--no-fp-filter', action='store_true', help='禁用误报预过滤器')
     parser.add_argument('--update-baseline', action='store_true', help='更新基线后退出')
     parser.add_argument('--profile-only', action='store_true', help='仅输出技能画像后退出')
+    parser.add_argument('--deep-analysis', action='store_true', help='深度分析模式：输出结构化审查报告供子 Agent 消费')
 
     args = parser.parse_args()
 
@@ -1583,6 +1753,19 @@ def main():
         except (EOFError, KeyboardInterrupt):
             _p("\n❌ 取消安装")
             sys.exit(0)
+
+    # ─── Deep Analysis 模式：输出结构化审查任务 ──────────────
+    if args.deep_analysis:
+        risk_level = result.get('risk_level', 'UNKNOWN')
+        risk_score = result.get('risk_score', 0)
+        if risk_level in ('HIGH', 'EXTREME'):
+            deep_report = _build_deep_review_task(target_path, result)
+            report_dir = Path(__file__).parent.parent / 'reports'
+            report_dir.mkdir(exist_ok=True)
+            deep_path = report_dir / f"{Path(target_path).name}-deep-review.json"
+            deep_path.write_text(json.dumps(deep_report, indent=2, ensure_ascii=False), encoding='utf-8')
+            _p(f"\n🧠 深度审查任务已生成: {deep_path}")
+            _p("   → 将此文件内容作为 sessions_spawn task 参数即可启动子 Agent 审查")
 
     # 根据风险等级设置退出码
     if result.get('risk_level') in ['EXTREME', 'HIGH']:
