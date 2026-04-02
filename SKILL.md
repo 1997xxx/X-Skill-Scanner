@@ -75,7 +75,7 @@ triggers:
   - 从链接安装
   - 从url安装
 metadata:
-  {"openclaw":{"emoji":"🛡️","requires":{"bins":["python3"]},"primaryEnv":"XSS_SCAN_PATH","skillKey":"x-skill-scanner"}}
+  {"openclaw":{"emoji":"🛡️","requires":{"bins":["python3","python"]},"primaryEnv":"XSS_SCAN_PATH","skillKey":"x-skill-scanner"}}
 ---
 
 # X Skill Scanner
@@ -105,19 +105,24 @@ Detect the language of the user's triggering message and use that language for t
 
 ⚠️ **扫描器运行前，必须确保 Python 依赖已安装。**
 
+**跨平台兼容：** 以下命令同时适用于 macOS/Linux/Windows。Agent 应自动检测可用的 Python 可执行文件（`python3` 或 `python`）。
+
 ```bash
-# 检查 PyYAML 是否可用
-python3 -c "import yaml" 2>/dev/null && echo "deps-ok" || echo "deps-missing"
+# 步骤 1: 检测 Python 可执行文件
+PYTHON_CMD=""
+python3 -c "import sys; print(sys.executable)" 2>/dev/null && PYTHON_CMD="python3"
+[ -z "$PYTHON_CMD" ] && python -c "import sys; print(sys.executable)" 2>/dev/null && PYTHON_CMD="python"
+```
+
+```bash
+# 步骤 2: 检查 PyYAML 是否可用
+$PYTHON_CMD -c "import yaml" 2>/dev/null && echo "deps-ok" || echo "deps-missing"
 ```
 
 - 如果输出 `deps-ok` → 跳过，直接执行后续流程
 - 如果输出 `deps-missing` → 自动安装：
   ```bash
-  pip3 install PyYAML
-  ```
-  或从技能目录安装：
-  ```bash
-  pip3 install -r ~/.openclaw/skills/x-skill-scanner/requirements.txt
+  $PYTHON_CMD -m pip install PyYAML
   ```
 
 **注意：** 扫描器仅依赖 `PyYAML`（用于解析 YAML 规则文件），无其他第三方依赖。LLM 功能通过 `urllib` 直接调用 HTTP API，不需要 `openai` / `anthropic` SDK。
@@ -128,9 +133,24 @@ python3 -c "import yaml" 2>/dev/null && echo "deps-ok" || echo "deps-missing"
 
 ⚠️ **当用户安装此技能时，必须自动执行以下配置步骤：**
 
-1. **检查是否已配置**
+1. **检查是否已配置**（跨平台兼容）
    ```bash
-   grep -q "x-skill-scanner" ~/.openclaw/workspace/AGENTS.md && echo "already-configured" || echo "not-configured"
+   # 使用 Python 代替 grep，兼容 Windows
+   python3 -c "
+   from pathlib import Path
+   agents = Path.home() / '.openclaw' / 'workspace' / 'AGENTS.md'
+   if agents.exists() and 'x-skill-scanner' in agents.read_text():
+       print('already-configured')
+   else:
+       print('not-configured')
+   " 2>/dev/null || python -c "
+   from pathlib import Path
+   agents = Path.home() / '.openclaw' / 'workspace' / 'AGENTS.md'
+   if agents.exists() and 'x-skill-scanner' in agents.read_text():
+       print('already-configured')
+   else:
+       print('not-configured')
+   "
    ```
 
 2. **如果未配置，自动注入到 AGENTS.md**
@@ -145,7 +165,8 @@ python3 -c "import yaml" 2>/dev/null && echo "deps-ok" || echo "deps-missing"
    当用户以任何方式表达安装/下载/添加/获取技能的意图时（无论用什么语言、什么措辞），**必须先扫描再安装**：
 
    1. **识别技能来源** — 本地路径 / URL / zip 链接 / clawhub slug
-   2. **运行安全扫描** — `python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py -t <path>`
+   2. **运行安全扫描** — `python3 <skill-dir>/lib/scanner.py -t <path>`（Windows: `python`）
+      - `<skill-dir>` 是技能安装路径，通常为 `~/.openclaw/skills/x-skill-scanner/`（macOS/Linux）或 `%USERPROFILE%\.openclaw\skills\x-skill-scanner\`（Windows）
       - 使用 `--no-semantic` 加速（跳过 LLM 语义审计）
       - 如果技能包含外部脚本引用、网络请求、安装钩子 → 去掉 `--no-semantic` 做完整扫描
    3. **展示结果并给出建议** — LOW/MEDIUM 可继续，HIGH/EXTREME 阻止并说明原因
@@ -166,7 +187,9 @@ python3 -c "import yaml" 2>/dev/null && echo "deps-ok" || echo "deps-missing"
 
    每次新会话启动时，自动检测是否有新增或变更的技能：
    ```bash
+   # macOS/Linux
    bash ~/.openclaw/skills/clawhub/scripts/check-skills-change.sh
+   # Windows: 使用 PowerShell 替代方案或直接跳过（变更检测由扫描器自身兜底）
    ```
    如果发现新技能且未被扫描过 → 立即扫描并报告。
    ````
@@ -215,6 +238,7 @@ This skill ships with `lib/scanner.py` — a self-contained Python CLI scanner.
 ```bash
 # 完整扫描（十二层防御）/ Full scan (all 12 layers)
 python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py -t <skill-path>
+# Windows: python %USERPROFILE%\.openclaw\skills\x-skill-scanner\lib\scanner.py -t <skill-path>
 
 # 快速模式（跳过 LLM 语义审计）/ Quick mode (skip LLM semantic audit)
 python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py -t <skill-path> --no-semantic
@@ -237,6 +261,8 @@ python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py -t <skill-path> --form
 # 扫描远程技能 URL / Scan remote skill URL
 python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py --url <skill-url>
 ```
+
+> **跨平台提示：** macOS/Linux 使用 `python3`，Windows 使用 `python`。路径中的 `~` 在 Python 中由 `Path.home()` 自动解析，无需手动替换。
 
 ---
 
