@@ -104,6 +104,11 @@ class Deobfuscator:
 
         lines = content.split('\n')
 
+        # v5.1: Pre-pass — detect and reconstruct multi-line obfuscated payloads
+        findings.extend(self._check_multi_line_hex_array(content, str(file_path)))
+        findings.extend(self._check_base64_bytes_literal(content, str(file_path)))
+        findings.extend(self._check_string_concat_assembly(content, str(file_path)))
+
         for line_num, line in enumerate(lines, 1):
             findings.extend(self._check_bidi(line, str(file_path), line_num))
             findings.extend(self._check_zero_width(line, str(file_path), line_num))
@@ -401,3 +406,195 @@ class Deobfuscator:
             'by_technique': by_technique,
             'by_severity': by_severity,
         }
+
+    # ─── v5.1: Multi-line Hex Array Reconstruction ──────────────
+    def _check_multi_line_hex_array(self, content: str, file_path: str) -> List[ObfuscationFinding]:
+        """检测并重组跨行的十六进制字节数组
+        
+        匹配模式: var = [0xNN, 0xNN, ...] （可能跨多行）
+        """
+        findings = []
+        
+        # Match Python-style hex array assignments (multi-line)
+        pattern = r'(\w+)\s*=\s*\[\s*((?:0x[0-9a-fA-F]{2}\s*,?\s*)+)\]'
+        
+        for match in re.finditer(pattern, content, re.DOTALL):
+            var_name = match.group(1)
+            hex_str = match.group(2)
+            
+            # Extract all hex bytes
+            hex_bytes = re.findall(r'0x([0-9a-fA-F]{2})', hex_str)
+            if len(hex_bytes) < 8:
+                continue
+            
+            try:
+                raw = bytes(int(b, 16) for b in hex_bytes)
+                # Strip null bytes (common obfuscation technique)
+                decoded = raw.replace(b'\x00', b'').decode('utf-8', errors='replace')
+                
+                if len(decoded.strip()) > 10 and any(c.isalpha() for c in decoded):
+                    danger_keywords = ['curl', 'wget', 'bash', 'sh', 'zsh', 'eval', 'exec',
+                                       'python', 'ruby', 'perl', 'powershell', 'cmd.exe',
+                                       'ransomware', 'malware', 'payload']
+                    found_dangers = [kw for kw in danger_keywords if kw.lower() in decoded.lower()]
+                    
+                    desc_lines = [
+                        f'检测到跨行十六进制字节数组，已重组并解码。',
+                        f'',
+                        f'📋 变量名: {var_name}',
+                        f'📋 字节数: {len(hex_bytes)}',
+                        f'',
+                        f'🔓 解码结果 (去除空字节后):',
+                        f'```',
+                        f'{decoded[:800]}',
+                        f'```',
+                    ]
+                    if found_dangers:
+                        desc_lines.extend([
+                            f'',
+                            f'⚠️  解码结果包含危险关键词: {", ".join(found_dangers)}',
+                        ])
+                    
+                    findings.append(ObfuscationFinding(
+                        technique='hex_array_reconstructed',
+                        severity='CRITICAL' if found_dangers else 'HIGH',
+                        description='\n'.join(desc_lines),
+                        file_path=file_path,
+                        line_number=content[:match.start()].count('\n') + 1,
+                        original=f'{var_name} = [{hex_str.strip()[:100]}...]',
+                        decoded=decoded[:800],
+                        confidence=0.95
+                    ))
+            except Exception:
+                pass
+        
+        return findings
+
+    # ─── v5.1: Base64 Bytes Literal Detection ───────────────────
+    def _check_base64_bytes_literal(self, content: str, file_path: str) -> List[ObfuscationFinding]:
+        """检测 Python bytes 字面量中的 Base64 编码内容
+        
+        匹配模式: var = b'Base64String...'
+        """
+        findings = []
+        
+        # Match b'...' or b"..." with base64-like content (32+ chars)
+        pattern = r'(\w+)\s*=\s*b["\']([A-Za-z0-9+/=]{32,})["\']'
+        
+        for match in re.finditer(pattern, content):
+            var_name = match.group(1)
+            b64_str = match.group(2)
+            
+            try:
+                import base64 as b64
+                decoded = b64.b64decode(b64_str).decode('utf-8', errors='replace')
+                
+                if len(decoded.strip()) > 10 and any(c.isalpha() for c in decoded):
+                    danger_keywords = ['curl', 'wget', 'bash', 'sh', 'zsh', 'eval', 'exec',
+                                       'python', 'ruby', 'perl', 'powershell', 'cmd.exe',
+                                       'ransomware', 'malware', 'payload']
+                    found_dangers = [kw for kw in danger_keywords if kw.lower() in decoded.lower()]
+                    
+                    desc_lines = [
+                        f'检测到 bytes 字面量中的 Base64 编码内容，已解码。',
+                        f'',
+                        f'📋 变量名: {var_name}',
+                        f'',
+                        f'🔓 解码结果:',
+                        f'```',
+                        f'{decoded[:800]}',
+                        f'```',
+                    ]
+                    if found_dangers:
+                        desc_lines.extend([
+                            f'',
+                            f'⚠️  解码结果包含危险关键词: {", ".join(found_dangers)}',
+                        ])
+                    
+                    findings.append(ObfuscationFinding(
+                        technique='base64_bytes_literal',
+                        severity='CRITICAL' if found_dangers else 'HIGH',
+                        description='\n'.join(desc_lines),
+                        file_path=file_path,
+                        line_number=content[:match.start()].count('\n') + 1,
+                        original=b64_str[:100],
+                        decoded=decoded[:800],
+                        confidence=0.95
+                    ))
+            except Exception:
+                pass
+        
+        return findings
+
+    # ─── v5.1: String Concat Assembly ───────────────────────────
+    def _check_string_concat_assembly(self, content: str, file_path: str) -> List[ObfuscationFinding]:
+        """检测通过多个变量拼接构建的 Base64 字符串
+        
+        匹配模式: _part1_ = "xxx"; _part2_ = "yyy"; ... → 重组后解码
+        """
+        findings = []
+        
+        # Find part variables that look like base64 fragments
+        part_pattern = r'(_?(?:part|chunk|seg)\w*_?)\s*=\s*["\']([A-Za-z0-9+/=]+)["\']'
+        parts = {}
+        for m in re.finditer(part_pattern, content):
+            parts[m.group(1)] = m.group(2)
+        
+        if len(parts) < 3:
+            return findings
+        
+        # Look for concatenation expressions that reference these parts
+        concat_patterns = [
+            r'(?:' + '|'.join(re.escape(k) for k in parts.keys()) + r'\s*\+\s*){2,}',
+        ]
+        
+        for cp in concat_patterns:
+            for m in re.finditer(cp, content):
+                expr = m.group(0)
+                # Extract part names from expression
+                part_names = re.findall(r'(_?(?:part|chunk|seg)\w*_?)', expr)
+                assembled = ''.join(parts.get(p, '') for p in part_names if p in parts)
+                
+                if len(assembled) < 32:
+                    continue
+                
+                try:
+                    import base64 as b64
+                    decoded = b64.b64decode(assembled).decode('utf-8', errors='replace')
+                    
+                    if len(decoded.strip()) > 10 and any(c.isalpha() for c in decoded):
+                        danger_keywords = ['curl', 'wget', 'bash', 'sh', 'zsh', 'eval', 'exec',
+                                           'ransomware', 'malware', 'payload']
+                        found_dangers = [kw for kw in danger_keywords if kw.lower() in decoded.lower()]
+                        
+                        desc_lines = [
+                            f'检测到字符串拼接构建的 Base64 内容，已重组并解码。',
+                            f'',
+                            f'📋 拼接表达式: {expr[:200]}',
+                            f'📋 重组后长度: {len(assembled)} chars',
+                            f'',
+                            f'🔓 解码结果:',
+                            f'```',
+                            f'{decoded[:800]}',
+                            f'```',
+                        ]
+                        if found_dangers:
+                            desc_lines.extend([
+                                f'',
+                                f'⚠️  解码结果包含危险关键词: {", ".join(found_dangers)}',
+                            ])
+                        
+                        findings.append(ObfuscationFinding(
+                            technique='string_concat_assembly',
+                            severity='CRITICAL' if found_dangers else 'HIGH',
+                            description='\n'.join(desc_lines),
+                            file_path=file_path,
+                            line_number=content[:m.start()].count('\n') + 1,
+                            original=expr[:200],
+                            decoded=decoded[:800],
+                            confidence=0.9
+                        ))
+                except Exception:
+                    pass
+        
+        return findings

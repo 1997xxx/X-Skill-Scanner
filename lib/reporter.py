@@ -640,6 +640,49 @@ td{padding:8px 10px;border-bottom:1px solid #eee;vertical-align:top;overflow-wra
         html += '<div class="sumrow"><span class="sumlbl">结论 / Verdict</span><span>'+self._esc(vt)+'</span></div>\n'
         html += '</div>\n'
         
+        # ─── Decoded Malicious Payloads (for HIGH/EXTREME risks) ──────────────
+        if rl in ('EXTREME', 'HIGH'):
+            raw_payloads = []
+            for f in r.get('findings', []):
+                dc = f.get('decoded_content') or ''
+                # Collect decoded content from deobfuscation findings
+                if dc.strip() and f.get('source') == 'deobfuscation':
+                    raw_payloads.append({
+                        'content': dc[:800],
+                        'file': f.get('file_path', ''),
+                        'line': f.get('line_number', 0),
+                        'technique': f.get('rule_id', ''),
+                    })
+            
+            # v5.1: Deduplicate — keep only complete payloads, drop fragments
+            # A fragment is either too short (<30 chars) or is a substring of another payload
+            decoded_payloads = []
+            seen_contents = set()
+            for dp in raw_payloads:
+                c = dp['content'].strip()
+                # Skip very short fragments
+                if len(c) < 30:
+                    continue
+                # Skip if this content is already covered by a longer payload we've seen
+                if any(c in existing for existing in seen_contents):
+                    continue
+                # Skip if a longer version of this content will come later — 
+                # instead, replace any existing shorter versions that are substrings of this one
+                seen_contents = {s for s in seen_contents if s not in c}
+                seen_contents.add(c)
+                decoded_payloads.append(dp)
+            
+            if decoded_payloads:
+                html += '<h2 style="color:#dc3545;margin-top:24px">&#x1F6A8; 解码后的恶意载荷 / Decoded Malicious Payloads</h2>\n'
+                html += '<div style="background:#fff3cd;border-left:4px solid #dc3545;padding:16px;border-radius:6px">\n'
+                html += '<p style="margin:0 0 12px;color:#856404;font-weight:600">&#x26A0;&#xFE0F; 以下是扫描器从混淆代码中还原出的真实内容 — 这是判断技能是否恶意的最关键证据。</p>\n'
+                for i, dp in enumerate(decoded_payloads, 1):
+                    html += f'<div style="margin-bottom:12px">\n'
+                    html += f'<strong>载荷 #{i}</strong> — {self._esc(dp["file"])}:{dp["line"]} [{self._esc(dp["technique"])}]\n'
+                    html += f'<pre style="background:#1a1a2e;color:#e9456e;padding:12px;border-radius:4px;overflow-x:auto;margin:6px 0;font-size:13px">{self._esc(dp["content"])}</pre>\n'
+                    html += f'</div>\n'
+                html += '</div>\n'
+        
         # ─── 各层检测结果 ──────────────────────────────────────
         layer_labels = {
             'deobfuscation': ('&#x1F9F9; 去混淆','Deobfuscation'),
@@ -760,6 +803,45 @@ td{padding:8px 10px;border-bottom:1px solid #eee;vertical-align:top;overflow-wra
         lines.append(f'| 安全问题 / Security Issues | {total_findings} 个（{crit_count} CRITICAL + {high_count} HIGH + {med_count} MEDIUM + {low_count} LOW） |')
         lines.append(f'| 结论 / Verdict | {vt} |')
         lines.append('')
+        
+        # ─── Decoded Malicious Payloads (for HIGH/EXTREME risks) ──────────────
+        if rl in ('EXTREME', 'HIGH'):
+            raw_payloads = []
+            for f in r.get('findings', []):
+                dc = f.get('decoded_content') or ''
+                if dc.strip() and f.get('source') == 'deobfuscation':
+                    raw_payloads.append({
+                        'content': dc[:800],
+                        'file': f.get('file_path', ''),
+                        'line': f.get('line_number', 0),
+                        'technique': f.get('rule_id', ''),
+                    })
+            
+            # v5.1: Deduplicate — keep only complete payloads, drop fragments
+            decoded_payloads = []
+            seen_contents = set()
+            for dp in raw_payloads:
+                c = dp['content'].strip()
+                if len(c) < 30:
+                    continue
+                if any(c in existing for existing in seen_contents):
+                    continue
+                seen_contents = {s for s in seen_contents if s not in c}
+                seen_contents.add(c)
+                decoded_payloads.append(dp)
+            
+            if decoded_payloads:
+                lines.append('### 🚨 解码后的恶意载荷 / Decoded Malicious Payloads')
+                lines.append('')
+                lines.append('> ⚠️ 以下是扫描器从混淆代码中还原出的真实内容 — 这是判断技能是否恶意的最关键证据。')
+                lines.append('')
+                for i, dp in enumerate(decoded_payloads, 1):
+                    file_short = dp['file'].split('/')[-2:] if '/' in dp['file'] else [dp['file']]
+                    lines.append(f'**载荷 #{i}** — `{"/".join(file_short)}`:{dp["line"]} [{dp["technique"]}]')
+                    lines.append('```')
+                    lines.append(dp['content'])
+                    lines.append('```')
+                    lines.append('')
         
         # ─── 各层检测结果 ──────────────────────────────────────
         layer_labels = {

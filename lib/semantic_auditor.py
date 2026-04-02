@@ -87,13 +87,72 @@ class SemanticAuditor:
             with open(config_path, 'r', encoding='utf-8') as f:
                 cfg = json.load(f)
             providers = cfg.get('models', {}).get('providers', {})
+
+            # --- Step 1: Try to match OpenClaw's default agent model ---
+            # agents.defaults.model.primary is like "custom-dogfooding/pitaya-03-20"
+            # Note: the provider prefix may be an alias — also search across all providers by model name
+            primary_model = None
+            try:
+                primary_model = cfg.get('agents', {}).get('defaults', {}).get('model', {}).get('primary')
+            except (AttributeError, TypeError):
+                pass
+
+            # Build a lookup: provider_id -> (first model id, all model ids)
+            # Also build reverse map: model_id -> provider_id
+            prov_models = {}
+            model_to_prov = {}
             for prov_id, prov_cfg in providers.items():
+                models_list = prov_cfg.get('models', [])
+                if models_list:
+                    all_ids = [m.get('id', '') for m in models_list]
+                    prov_models[prov_id] = {'first': all_ids[0], 'all': all_ids}
+                    for mid in all_ids:
+                        model_to_prov[mid] = prov_id
+
+            # Resolve preferred provider + model
+            preferred_prov_id = None
+            preferred_model_id = None
+            if primary_model and '/' in str(primary_model):
+                parts = str(primary_model).split('/', 1)
+                pref_prov_id, pref_model_id = parts[0], parts[1]
+                # Case A: exact provider match AND model in that provider
+                if pref_prov_id in prov_models and pref_model_id in prov_models[pref_prov_id]['all']:
+                    preferred_prov_id = pref_prov_id
+                    preferred_model_id = pref_model_id
+                    _p(f"🎯 匹配默认模型: {preferred_prov_id}/{preferred_model_id}")
+                # Case B: provider prefix doesn't match any provider key, but model name exists elsewhere
+                elif pref_model_id in model_to_prov:
+                    preferred_prov_id = model_to_prov[pref_model_id]
+                    preferred_model_id = pref_model_id
+                    _p(f"🎯 跨 provider 匹配默认模型: {preferred_prov_id}/{preferred_model_id} (别名解析)")
+                else:
+                    _p(f"⚠️  默认模型 {primary_model} 未在任何 provider 中找到，回退到遍历")
+            elif primary_model and primary_model in model_to_prov:
+                # No slash — bare model name
+                preferred_prov_id = model_to_prov[primary_model]
+                preferred_model_id = primary_model
+                _p(f"🎯 匹配默认模型: {preferred_prov_id}/{preferred_model_id}")
+
+            # --- Step 2: Iterate providers, preferred first ---
+            ordered_ids = list(providers.keys())
+            if preferred_prov_id and preferred_prov_id in ordered_ids:
+                ordered_ids.remove(preferred_prov_id)
+                ordered_ids.insert(0, preferred_prov_id)
+
+            for prov_id in ordered_ids:
+                prov_cfg = providers[prov_id]
                 api_key = prov_cfg.get('apiKey')
                 base_url = prov_cfg.get('baseUrl')
                 api_type = prov_cfg.get('api', 'openai-chat')
                 models_list = prov_cfg.get('models', [])
                 if api_key and base_url and models_list:
-                    model_id = models_list[0].get('id', '')
+                    # Use preferred model if this is the preferred provider and model exists in list
+                    info = prov_models.get(prov_id, {})
+                    all_ids = info.get('all', [])
+                    if prov_id == preferred_prov_id and preferred_model_id in all_ids:
+                        model_id = preferred_model_id
+                    else:
+                        model_id = info.get('first', models_list[0].get('id', ''))
                     if not self.provider_api_key: self.provider_api_key = api_key
                     if not self.provider_model: self.provider_model = model_id
                     

@@ -195,18 +195,35 @@ class LLMReviewer:
             
             providers = cfg.get('models', {}).get('providers', {})
             
+            # Build reverse map: model_id -> provider_id (for alias resolution)
+            model_to_prov = {}
+            prov_model_lists = {}
+            for prov_id, prov_cfg in providers.items():
+                models_list = prov_cfg.get('models', [])
+                prov_model_lists[prov_id] = [m.get('id', '') for m in models_list]
+                for mid in prov_model_lists[prov_id]:
+                    model_to_prov[mid] = prov_id
+            
             # ─── 策略 1: 优先使用 OpenClaw 默认模型对应的 provider ─────
             default_prov_id, default_model_id = self._get_default_model_ref(cfg)
             
-            if default_prov_id and default_prov_id in providers:
-                prov_cfg = providers[default_prov_id]
+            # Cross-provider alias resolution
+            resolved_prov_id = default_prov_id
+            resolved_model_id = default_model_id
+            if default_model_id and default_model_id in model_to_prov:
+                resolved_prov_id = model_to_prov[default_model_id]
+                resolved_model_id = default_model_id
+                if resolved_prov_id != default_prov_id:
+                    print(f"🎯 LLM Reviewer: 跨 provider 匹配默认模型: {resolved_prov_id}/{resolved_model_id}", file=sys.stderr)
+            
+            if resolved_prov_id and resolved_prov_id in providers:
+                prov_cfg = providers[resolved_prov_id]
                 api_key = prov_cfg.get('apiKey')
                 base_url = prov_cfg.get('baseUrl')
                 models_list = prov_cfg.get('models', [])
                 
                 if api_key and base_url and models_list:
-                    # 如果用户指定了 model 且不在该 provider 的模型列表中，用第一个
-                    model_id = self.model or default_model_id
+                    model_id = resolved_model_id
                     available_ids = [m.get('id', '') for m in models_list]
                     if model_id not in available_ids and available_ids:
                         model_id = available_ids[0]
@@ -274,6 +291,12 @@ class LLMReviewer:
         # 策略 3: 标准模式 — baseUrl 后追加 /v1/chat/completions
         if not base.endswith('/v1/chat/completions'):
             candidates.append(f'{base}/v1/chat/completions')
+        
+        # 策略 3.5: 直接在 bare URL 后追加 /chat/completions（无 /v1/）
+        # e.g., https://host/custom-endpoint → https://host/custom-endpoint/chat/completions
+        # 适用于 idealab 等非标准 OpenAI 兼容端点
+        if not base.endswith('/chat/completions'):
+            candidates.append(f'{base}/chat/completions')
         
         # 策略 4: 尝试原始 baseUrl（可能已经是完整端点）
         candidates.append(base)

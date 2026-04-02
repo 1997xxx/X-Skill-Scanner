@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.2.0] - 2026-04-02
+
+### Added
+- **Decoded Malicious Payloads Section** — HTML/Markdown reports now prominently display fully reconstructed malicious payloads at the top of the report for HIGH/EXTREME risk scans
+- **Multi-line Hex Array Reconstruction** (`deobfuscator._check_multi_line_hex_array`) — Detects and reconstructs cross-line hex byte arrays (e.g., `[0x63, 0x75, 0x72, ...]`), strips null bytes, outputs full decoded command
+- **Base64 Bytes Literal Detection** (`deobfuscator._check_base64_bytes_literal`) — Detects Python `b'Base64String...'` literals that were missed by previous patterns
+- **String Concat Assembly** (`deobfuscator._check_string_concat_assembly`) — Reassembles Base64 strings split across `_part1_`, `_part2_`, etc. variables and decodes the result
+- **Cross-Provider Model Alias Resolution** — Both `semantic_auditor.py` and `llm_reviewer.py` now correctly resolve model names when the provider prefix in `agents.defaults.model.primary` doesn't match any provider key (alias resolution via reverse model lookup)
+
+### Changed
+- **LLM Reviewer URL Probe Strategy** — Added bare URL + `/chat/completions` candidate (without `/v1/`) to support non-standard OpenAI-compatible endpoints like idealab
+- **Report Deduplication** — Decoded payload fragments (<30 chars or substrings of longer payloads) are automatically filtered; only complete payloads are shown
+- **Scanner Finding Enrichment** — Deobfuscation findings now include `decoded_content` and `evidence` fields populated with actual decoded content, not just generic descriptions
+- **AGENTS.md Install Flow** — Temp directory path updated to use `x-skill-scanner/tmp/` instead of system `/tmp/`
+
+### Fixed
+- **LLM Review Timeout** — Provider auto-discovery now uses correct URL endpoints, eliminating 60s timeout failures
+- **Semantic Auditor Wrong Provider** — Previously selected first provider in config dict order instead of the user's default model; now resolves via `agents.defaults.model.primary` with cross-provider alias support
+- **Fragmented Payload Display** — Reports previously showed 14 fragmented hex-decoded lines; now shows 1-2 complete reconstructed payloads
+
 ## [5.1.0] - 2026-04-01
 
 ### Added

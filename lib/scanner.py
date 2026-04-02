@@ -703,16 +703,27 @@ class SkillScanner:
             _p("\n📊 步骤 2/7: 去混淆检测...")
             deob_findings = self.deobfuscator.analyze_directory(target, path_filter=self.path_filter)
             for f in deob_findings:
+                desc = f.description
+                evidence_text = ''
+                
+                # v5.1: 将解码后的内容注入报告和 evidence
+                if hasattr(f, 'decoded') and f.decoded and f.decoded.strip():
+                    decoded_preview = f.decoded[:300]
+                    desc += f"\n\n🔓 解码内容:\n```\n{decoded_preview}\n```"
+                    evidence_text = decoded_preview
+                
                 all_findings.append({
                     'rule_id': f'DEOBF_{f.technique.upper()}',
                     'severity': f.severity,
                     'category': 'deobfuscation',
                     'title': f'混淆检测: {f.technique}',
-                    'description': f.description,  # deobfuscator 已构建完整描述
+                    'description': desc,
                     'file_path': f.file_path,
                     'line_number': f.line_number,
                     'remediation': '审查混淆代码的真实意图',
                     'source': 'deobfuscation',
+                    'evidence': evidence_text,
+                    'decoded_content': getattr(f, 'decoded', ''),
                 })
             _p(f"   发现 {len(deob_findings)} 个混淆问题")
 
