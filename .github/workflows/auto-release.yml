@@ -11,30 +11,37 @@ jobs:
   auto-release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Extract version
         id: version
         run: |
-          # Try scanner.py first, fallback to CHANGELOG.md
-          VERSION=$(grep -oP "scanner_version.*['\"]\K[^'\"]+" lib/scanner.py 2>/dev/null || echo "")
+          # Primary: pyproject.toml (canonical source)
+          VERSION=$(grep -oP '^version\s*=\s*"\K[^"]+' pyproject.toml 2>/dev/null || echo "")
           if [ -z "$VERSION" ]; then
-            VERSION=$(head -1 CHANGELOG.md | grep -oP 'v[\d.]+' || echo "v0.0.0")
+            # Fallback: SKILL.md frontmatter
+            VERSION=$(grep -oP '^version:\s*\K[\d.]+' SKILL.md 2>/dev/null || echo "")
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Detected version: $VERSION"
+          if [ -z "$VERSION" ]; then
+            # Last resort: git describe
+            VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
+            VERSION="${VERSION#v}"
+          fi
+          echo "version=v${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Detected version: v${VERSION}"
 
       - name: Check if release exists
         id: check
         run: |
-          if gh release view "${{ steps.version.outputs.version }}" &>/dev/null; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-            echo "Release already exists"
+          TAG="${{ steps.version.outputs.version }}"
+          if gh release view "$TAG" &>/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release $TAG already exists — skipping"
           else
-            echo "exists=false" >> $GITHUB_OUTPUT
-            echo "Creating new release"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Creating new release $TAG"
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -43,9 +50,8 @@ jobs:
         if: steps.check.outputs.exists == 'false'
         run: |
           TAG="${{ steps.version.outputs.version }}"
-          TITLE="$TAG - $(head -1 CHANGELOG.md | sed "s/^# $TAG //")"
           gh release create "$TAG" \
-            --title "$TITLE" \
+            --title "$TAG" \
             --generate-notes \
             --latest
         env:
