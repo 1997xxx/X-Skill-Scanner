@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-v5.2.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v5.5.0-blue.svg)](CHANGELOG.md)
 [![GitHub Stars](https://img.shields.io/github/stars/1997xxx/X-Skill-Scanner?style=social)](https://github.com/1997xxx/X-Skill-Scanner)
 
 📖 [中文文档 →](README_CH.md)
@@ -284,6 +284,15 @@ Report: text / HTML (with decoded payloads) / JSON / Markdown / SARIF
 
 ## 🆕 Changelog Highlights
 
+### v5.5.0 (2026-04-02) — Architecture Upgrade
+- 🔌 **Plugin Analyzer Architecture** — `BaseAnalyzer` interface for extensible detection engines (reference: CoPaw)
+- 📝 **YAML Signature Rules** — Per-category YAML files with `exclude_patterns` support, replacing monolithic JSON
+- 🏢 **Enterprise API False Positive Fix** — Trusted domain whitelist (alibaba-inc.com, aliyun.com, etc.) + context-aware downgrade logic
+- 📊 **Structured Data Models** — `dataclass` + Enum (`Severity`, `ThreatCategory`) for type-safe findings
+- 🔁 **Finding Deduplication** — Automatic dedup by rule_id + file_path + line_number
+- 🧠 **Sub-Agent Deep Review** — `--deep-analysis` flag generates structured review tasks for LLM sub-agents
+- 🛡️ **Reference Projects:** CoPaw (Alibaba open-source AI assistant) + ClawSentry (Volcengine AI security)
+
 ### v5.2.0 (2026-04-02)
 - 🚨 **Decoded Malicious Payloads** — Reports now prominently display fully reconstructed malicious commands at the top
 - 🔓 **Multi-layer Deobfuscation** — Hex array reconstruction, Base64 bytes literal detection, string concat assembly
@@ -331,4 +340,4 @@ If this project helps you, consider buying me a coffee! 如果这个项目对你
 
 **X Skill Scanner Team** — Your AI skill security guardian 🛡️
 
-*Version: v5.3.0 | Updated: 2026-04-02*
+*Version: v5.5.0 | Updated: 2026-04-02*
