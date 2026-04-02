@@ -163,7 +163,7 @@ class SkillProfiler:
             # 描述提取
             desc_match = re.search(r'^>\s*(.+)$', content, re.MULTILINE)
             if desc_match:
-                meta['description'] = desc_match(1).strip()
+                meta['description'] = desc_match.group(1).strip()
             
             # 技能类型
             if 'openclaw' in content.lower():
