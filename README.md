@@ -140,27 +140,20 @@ openclaw gateway restart
 ### Standalone CLI
 
 ```bash
-# Clone the repository
-git clone https://github.com/1997xxx/X-Skill-Scanner.git
-cd X-Skill-Scanner
-
-# Install dependencies
-pip install -r requirements.txt
-
 # Scan a local skill
-./scan -t ./my-skill/
+python3 lib/scanner.py -t ./my-skill/
 
 # Scan a remote skill URL
-./scan --url https://github.com/user/skill-repo
+python3 lib/scanner.py --url https://github.com/user/skill-repo
 
 # Quick mode (skip LLM semantic audit)
-./scan -t ./my-skill/ --no-semantic
+python3 lib/scanner.py -t ./my-skill/ --no-semantic
 
 # HTML report with decoded payload highlights
-./scan -t ./my-skill/ --format html -o report.html
+python3 lib/scanner.py -t ./my-skill/ --format html -o report.html
 
 # SARIF output (for GitHub Security Tab integration)
-./scan -t ./my-skill/ --format sarif -o results.sarif
+python3 lib/scanner.py -t ./my-skill/ --format sarif -o results.sarif
 ```
 
 ### Configuration

@@ -140,27 +140,20 @@ openclaw gateway restart
 ### 独立命令行
 
 ```bash
-# 克隆仓库
-git clone https://github.com/1997xxx/X-Skill-Scanner.git
-cd X-Skill-Scanner
-
-# 安装依赖
-pip install -r requirements.txt
-
 # 扫描本地技能
-./scan -t ./my-skill/
+python3 lib/scanner.py -t ./my-skill/
 
 # 扫描远程技能 URL
-./scan --url https://github.com/user/skill-repo
+python3 lib/scanner.py --url https://github.com/user/skill-repo
 
 # 快速模式（跳过 LLM 语义审计）
-./scan -t ./my-skill/ --no-semantic
+python3 lib/scanner.py -t ./my-skill/ --no-semantic
 
 # HTML 报告（含解码恶意载荷高亮）
-./scan -t ./my-skill/ --format html -o report.html
+python3 lib/scanner.py -t ./my-skill/ --format html -o report.html
 
 # SARIF 输出（对接 GitHub Security Tab）
-./scan -t ./my-skill/ --format sarif -o results.sarif
+python3 lib/scanner.py -t ./my-skill/ --format sarif -o results.sarif
 ```
 
 ### 配置
