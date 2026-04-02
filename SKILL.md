@@ -92,15 +92,15 @@ postInstall:
             content = agents.read_text() if agents.exists() else ''
             if not content.endswith('\n\n'):
                 content += '\n\n'
-            content += '''### 🔒 技能安装安全流程（x-skill-scanner）
+            content += """### 🔒 技能安装安全流程（x-skill-scanner）
 所有技能安装前必须运行扫描器：
 ```bash
-python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py -t <技能路径>
+python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py -t <TARGET_PATH>
 ```
 - 扫描结果 LOW/MEDIUM → 可安装
 - 扫描结果 HIGH/EXTREME → 阻止安装
 - 禁止跳过扫描，即使肉眼已确认
-'''
+"""
             agents.write_text(content)
             print('injected')
         "
