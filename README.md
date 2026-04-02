@@ -7,53 +7,98 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![Version](https://img.shields.io/badge/version-v5.2.0-blue.svg)](CHANGELOG.md)
+[![GitHub Stars](https://img.shields.io/github/stars/1997xxx/X-Skill-Scanner?style=social)](https://github.com/1997xxx/X-Skill-Scanner)
 
 ---
 
 ## 🚨 Why This Tool Matters / 为什么需要这个工具
 
-ClawHub has been infiltrated by **472+ malicious skills** (per SlowMist Security monitoring), including top-downloaded popular skills. Attack vectors include:
+ClawHub has been infiltrated by **472+ malicious skills** (per SlowMist Security monitoring), including top-downloaded popular skills. Every installed skill is a trust relationship — and that trust deserves scrutiny.
 
-ClawHub 已被 **472+ 恶意 Skills** 渗透（慢雾安全监测），包括下载量最高的热门技能。攻击手法包括：
+ClawHub 已被 **472+ 恶意 Skills** 渗透（慢雾安全监测），包括下载量最高的热门技能。每个安装的技能都是一份信任——这份信任值得被审视。
 
-- Base64-encoded backdoors + remote code execution / Base64 编码后门 + 远程代码执行
-- osascript fake password dialogs on macOS (Nova Stealer) / osascript 伪造 macOS 系统密码弹窗（Nova Stealer）
-- SSH/AWS credential theft + webhook exfiltration / SSH/AWS 密钥窃取 + webhook 外传
-- Browser cookie/localStorage data theft / 浏览器 Cookie/LocalStorage 数据窃取
+### Real Attack Examples / 真实攻击案例
 
-> ⚠️ Every installed skill is a trust relationship — and that trust deserves scrutiny.
->
-> 每个安装的技能都是一份信任——这份信任值得被审视。
+| 攻击手法 | 案例 | 影响 |
+|---------|------|------|
+| Base64 编码后门 + 远程代码执行 | `weather-query` 伪装成天气工具，实际下载勒索软件 | 文件系统加密 |
+| osascript 伪造密码弹窗 | Nova Stealer 窃取 macOS 钥匙串凭证 | 账号泄露 |
+| SSH/AWS 密钥外传 | 通过 Discord Webhook 发送窃取的凭证 | 云资源沦陷 |
+| 浏览器 Cookie 窃取 | 读取 localStorage / Keychain 中的会话令牌 | 会话劫持 |
 
 ---
 
-## 🆕 v5.0 New Features / v5.0 新特性
+## ✨ Core Features / 核心功能
 
-### 🧠 Profile-Driven Adaptive Scanning / 画像驱动自适应扫描
-Scans skills in three modes based on trust profile:
-根据信任画像自动选择扫描模式：
-- **Quick** (trust ≥70): Only threat intel + static analysis + credential check — ~3s
-- **Standard** (trust 40-69): Full 12-layer scan + LLM review for MEDIUM+ findings
-- **Full** (trust <40 or red flags): All engines + LLM reviews every finding
+### 1️⃣ 十二层深度防御 — 从静态到语义的全方位检测
 
-### 🤖 Batch LLM Review / LLM 批量审查
-Groups findings by file for single LLM call instead of one-per-finding. Reduces API calls by **70%+**.
-按文件分组发现，一次 LLM 调用审查多条，API 调用减少 **70%+**。
+X Skill Scanner 不是简单的正则匹配工具。它构建了 **12 层独立检测引擎**，覆盖从表面特征到深层意图的完整攻击面：
 
-### 🔗 Cross-Layer Correlation / 跨层关联分析
-Detects multi-stage attack chains across detection layers:
-识别跨引擎的多阶段攻击链：
-- C2 Infiltration Chain (obfuscation + network + persistence)
-- Credential Harvest Chain (credential theft + data exfiltration)
-- Supply Chain Attack (malicious dependency + install hook)
-- Rug-Pull Pattern (baseline change + semantic risk)
-- Social Engineering Chain (prompt injection + exploitation)
-- Reverse Shell Chain (reverse shell + network + obfuscation)
+- **表层检测** — 威胁情报匹配（380+ 已知恶意技能名、IOC 域名/IP）、白名单校验
+- **代码分析** — 194+ 静态规则、AST 污点追踪、依赖 CVE 检查、去混淆引擎
+- **行为画像** — 网络端点提取、安装钩子检测、凭证窃取模式识别
+- **语义理解** — LLM 驱动的意图分析，识别肉眼无法发现的隐蔽威胁
+- **关联分析** — 跨引擎攻击链检测，发现多阶段组合攻击
 
-### 📈 Risk Score Upgrade / 风险评分升级
-- CORRELATION category weight = 35 (highest priority)
-- Cross-layer stacking bonus for multi-engine hits on same file
-- Context-aware modifiers (install hook ×1.5, network ×1.2, credentials ×1.3)
+**开箱即用，零配置。** 扫描器自动发现 OpenClaw 的 LLM Provider 配置，无需额外设置环境变量。
+
+### 2️⃣ 智能去混淆 — 还原多层混淆后的真实载荷
+
+恶意技能最常用的手法是混淆。扫描器内置 **5 种去混淆引擎**，能穿透任意层数的编码伪装：
+
+| 技术 | 说明 | 示例 |
+|------|------|------|
+| Base64 解码 | 自动识别并解码 `base64.b64decode()`、`b'...'` 字面量 | `Y3VybCAtcy...` → `curl -s ...` |
+| Hex 数组重组 | 跨行收集 `[0x63, 0x75, 0x72, ...]` 字节数组，去除空字节后还原 | `curl\x00 -s\x00` → `curl -s` |
+| 字符串拼接还原 | 识别 `_part1_ + _part2_ + ...` 模式，重组后解码 | 分散的 Base64 片段 → 完整命令 |
+| BiDi 字符检测 | 检测 Unicode 双向覆盖字符（CVE-2021-42574） | 视觉欺骗型文件名 |
+| 零宽字符检测 | 检测不可见字符注入 | 隐藏的水印/标识符 |
+
+**报告直接展示解码后的恶意载荷** — 不再需要人工逆向混淆代码。
+
+### 3️⃣ 画像驱动自适应扫描 — 速度与深度的最佳平衡
+
+不是所有技能都需要全量扫描。扫描器先对技能进行**信任画像评估**，自动选择扫描策略：
+
+```
+信任评分 ≥ 70  → 快速模式 (3 层)    ~3 秒
+信任评分 40-69 → 标准模式 (12 层)   ~15 秒
+信任评分 < 40  → 全面模式 (12 层 + LLM 逐条审查)  ~60 秒
+```
+
+画像评估维度：作者可信度、技能类型、文件结构合理性、红旗标记等。
+
+### 4️⃣ LLM 批量二次审查 — API 调用减少 70%+
+
+传统方案对每条发现单独调用 LLM，API 开销巨大。扫描器采用**按文件分组批量审查**策略：
+
+- 同一文件的所有发现合并为一次 LLM 调用
+- 附带完整代码上下文，提高判断准确率
+- 自动过滤误报（安全工具自引用、文档内容、测试数据）
+- 支持跨 Provider 别名解析，自动适配你的 OpenClaw 默认模型
+
+### 5️⃣ 跨层关联分析 — 发现多阶段攻击链
+
+单个检测引擎的发现可能是孤立的，但多个引擎的组合信号才是真正的威胁。扫描器识别 **6 种攻击链模式**：
+
+| 攻击链 | 组成引擎 | 典型场景 |
+|--------|---------|---------|
+| C2 渗透链 | 去混淆 + 网络 + 持久化 | 混淆下载远控 → 建立 C2 → 持久化 |
+| 凭据收割链 | 凭据窃取 + 数据外传 | 读取 SSH 密钥 → Webhook 外发 |
+| 供应链攻击 | 恶意依赖 + 安装钩子 | 引入恶意包 → postinstall 执行 |
+| Rug-Pull 模式 | 基线变更 + 语义风险 | 正常技能更新后植入恶意代码 |
+| 社交工程链 | 提示词注入 + 利用 | 绕过系统指令 → 执行危险操作 |
+| 反向 Shell 链 | 反向 Shell + 网络 + 混淆 | 混淆反弹 Shell 连接 |
+
+### 6️⃣ 多格式报告 — 对接你的工作流
+
+| 格式 | 用途 |
+|------|------|
+| **Text** | 终端快速查看 |
+| **HTML** | 交互式报告，含解码恶意载荷高亮区块 |
+| **JSON** | 机器可读，CI/CD 集成 |
+| **Markdown** | GitHub Issues / PR 评论 |
+| **SARIF** | GitHub Security Tab 原生集成 |
 
 ---
 
@@ -80,6 +125,22 @@ Detects multi-stage attack chains across detection layers:
 
 ## 🚀 Quick Start / 快速开始
 
+### As an OpenClaw Skill (Recommended) / 作为 OpenClaw 技能（推荐）
+
+```bash
+# Clone into your skills directory
+git clone https://github.com/1997xxx/X-Skill-Scanner.git \
+  ~/.openclaw/skills/x-skill-scanner
+
+# Restart OpenClaw — the skill auto-registers
+openclaw gateway restart
+
+# Now just say: "安装 xxx skill" or "扫描这个技能"
+# The scanner auto-triggers before any skill installation
+```
+
+### Standalone CLI / 独立命令行
+
 ```bash
 # Clone the repository
 git clone https://github.com/1997xxx/X-Skill-Scanner.git
@@ -88,41 +149,42 @@ cd X-Skill-Scanner
 # Install dependencies
 pip install -r requirements.txt
 
-# Scan a single skill
+# Scan a local skill
 ./scan -t ./my-skill/
+
+# Scan a remote skill URL
+./scan --url https://github.com/user/skill-repo
 
 # Quick mode (skip LLM semantic audit)
 ./scan -t ./my-skill/ --no-semantic
 
-# Disable FP filter (for debugging)
-./scan -t ./my-skill/ --no-fp-filter
-
-# HTML report
+# HTML report with decoded payload highlights
 ./scan -t ./my-skill/ --format html -o report.html
 
-# SARIF output (for GitHub Security Tab)
+# SARIF output (for GitHub Security Tab integration)
 ./scan -t ./my-skill/ --format sarif -o results.sarif
 ```
 
 ### Configuration / 配置
 
-为 LLM 驱动的功能设置环境变量：
+**零配置模式：** 扫描器自动从 `~/.openclaw/openclaw.json` 发现 LLM Provider，无需手动设置。
+
+如需自定义 Provider：
 ```bash
 export OPENAI_BASE_URL="https://your-provider.com/v1/chat/completions"
 export OPENAI_API_KEY="your-api-key"
 export OPENAI_MODEL="gpt-4o-mini"
 ```
 
-或在 `~/.openclaw/openclaw.json` 中配置 — 扫描器会自动发现 Provider。
-
 ### CLI Options / 命令行选项
 
 ```
 -t TARGET             目标技能目录或文件 / Target skill directory or file
+--url URL             远程技能 URL / Remote skill URL (auto-clones & scans)
 --no-semantic         跳过 LLM 语义审计 / Skip LLM semantic audit
 --no-llm-review       跳过 LLM 二次审查 / Skip LLM secondary review
 --no-fp-filter        跳过误报预过滤器 / Skip false positive pre-filter
---format FORMAT       输出格式：text(默认)/html/json/md/sarif / Output format
+--format FORMAT       输出格式：text(默认)/html/json/md/sarif
 -o OUTPUT             输出文件路径 / Output file path
 --whitelist FILE      自定义白名单 JSON / Custom whitelist JSON
 --threat-intel FILE   自定义威胁情报 JSON / Custom threat intel JSON
@@ -149,38 +211,54 @@ export OPENAI_MODEL="gpt-4o-mini"
 ## 🏗️ Architecture / 架构概览
 
 ```
-Skill Input / 技能输入
+Skill Input (local dir / GitHub URL / zip)
     │
     ▼
-┌─ Whitelist Check / 白名单检查 ───────────────────┐
-│                                                  │
-│  ┌─ Skill Profiler / 技能画像 → scan_strategy ─┐ │
-│  │  quick(快速) / standard(标准) / full(全面)   │ │
-│  ▼                                            │  │
-│  ┌─ Threat Intel / 威胁情报 → names/IOC       │  │
-│  ├─ Deobfuscation / 去混淆 → Base64/Hex/BiDi  │  │
-│  ├─ Static Analysis / 静态分析 → 194+ rules   │  │ ← controlled by
-│  ├─ AST Analysis / AST 分析 → taint tracking   │  │   scan_strategy
-│  ├─ Dependency Check / 依赖检查 → CVE matching │  │
-│  ├─ Prompt Injection / 提示注入 → 25+ probes   │  │
-│  ├─ Baseline Tracking / 基线追踪 → SHA-256     │  │
-│  ├─ Semantic Audit / 语义审计 → LLM intent     │  │
-│  ├─ Entropy Analysis / 熵值分析 → anomaly      │  │
-│  ├─ Install Hooks / 安装钩子 → postinstall     │  │
-│  ├─ Network Profiler / 网络画像 → C2/exfil     │  │
-│  └─ Credential Theft / 凭据窃取 → osascript    │  │
-│                                                  │
-│  ┌─ Cross-Layer Correlation / 跨层关联 → chains │ │
-│  └─ FP Pre-Filter / 误报预过滤 → auto-filter   │  │
-│                                                  │
-│  ┌─ LLM Batch Review / LLM 批量审查            │  │
-│  └─ Risk Scorer / 风险评分 → score + verdict   │  │
-│                                                  │
-└──────────────────────────────────────────────────┘
+┌─ Pre-flight Legality Check ──────────────────────────────────┐
+│  Validates SKILL.md structure, blocks non-skill inputs       │
+├─ Whitelist Check ────────────────────────────────────────────┤
+│  Known-safe skills skip full scan                            │
+├─ Skill Profiling ────────────────────────────────────────────┤
+│  Trust score → scan_strategy (quick / standard / full)       │
+├─ 12-Layer Detection Pipeline ────────────────────────────────┤
+│                                                              │
+│  Threat Intel → Deobfuscation → Static Analysis → AST       │
+│  Dependencies → Prompt Injection → Baseline → Semantic      │
+│  Entropy → Install Hooks → Network → Credential Theft       │
+│                                                              │
+├─ Cross-Layer Correlation ────────────────────────────────────┤
+│  Detects 6 attack chain patterns across engines              │
+├─ FP Pre-Filter ──────────────────────────────────────────────┤
+│  Auto-filters security tool self-references, docs, tests     │
+├─ LLM Batch Review ───────────────────────────────────────────┤
+│  Groups findings by file → single LLM call per file          │
+├─ Risk Scoring ───────────────────────────────────────────────┤
+│  Cross-layer stacking + correlation bonuses + verdict        │
+└──────────────────────────────────────────────────────────────┘
     │
     ▼
-Report / 报告 (text / HTML / JSON / SARIF)
+Report: text / HTML (with decoded payloads) / JSON / Markdown / SARIF
 ```
+
+---
+
+## 🆕 Changelog Highlights / 版本亮点
+
+### v5.2.0 (2026-04-02)
+- 🚨 **Decoded Malicious Payloads** — Reports now prominently display fully reconstructed malicious commands at the top
+- 🔓 **Multi-layer Deobfuscation** — Hex array reconstruction, Base64 bytes literal detection, string concat assembly
+- 🎯 **Provider Alias Resolution** — Auto-resolves model names across providers (fixes LLM timeout issues)
+- 🧹 **Fragment Dedup** — Only complete payloads shown; fragments automatically filtered
+
+### v5.1.0 (2026-04-01)
+- Ethics & Compliance Framework (six principles)
+- Project hygiene cleanup + version synchronization
+
+### v5.0.0 (2026-03-31)
+- Profile-driven adaptive scanning (quick/standard/full modes)
+- Batch LLM review (70%+ API call reduction)
+- Cross-layer correlation engine (6 attack chain patterns)
+- Risk scoring upgrade with context-aware modifiers
 
 ---
 
@@ -207,4 +285,4 @@ MIT License
 
 **X Skill Scanner Team** — Your AI skill security guardian 🛡️
 
-*Version: v5.2.0 | Updated: 2026-04-01*
+*Version: v5.2.0 | Updated: 2026-04-02*
