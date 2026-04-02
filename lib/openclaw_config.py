@@ -101,8 +101,50 @@ def get_openclaw_skills_dir() -> Optional[Path]:
     return None
 
 
+def _strip_json_comments(content: str) -> str:
+    """Remove // line comments from JSON content while preserving strings.
+    
+    OpenClaw's config is JSON5-ish and may contain // comments.
+    Standard json.load() fails on these. This strips them safely.
+    """
+    lines = content.split('\n')
+    cleaned = []
+    for line in lines:
+        # Find // that's NOT inside a string value
+        # Simple heuristic: count unescaped quotes before //
+        result = []
+        in_string = False
+        escaped = False
+        i = 0
+        while i < len(line):
+            char = line[i]
+            if escaped:
+                result.append(char)
+                escaped = False
+                i += 1
+                continue
+            if char == '\\':
+                result.append(char)
+                escaped = True
+                i += 1
+                continue
+            if char == '"':
+                in_string = not in_string
+                result.append(char)
+            elif char == '/' and i + 1 < len(line) and line[i + 1] == '/' and not in_string:
+                # Found comment start — skip rest of line
+                break
+            else:
+                result.append(char)
+            i += 1
+        cleaned.append(''.join(result))
+    return '\n'.join(cleaned)
+
+
 def load_openclaw_config() -> Optional[dict]:
     """Load and parse the OpenClaw configuration file.
+    
+    Handles JSON5 features like // comments that standard json.load() rejects.
     
     Returns:
         Parsed config dict, or None if file not found or invalid JSON.
@@ -115,6 +157,14 @@ def load_openclaw_config() -> Optional[dict]:
     
     try:
         with open(config_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            content = f.read()
+        
+        # Try standard parse first
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            # Strip comments and retry (JSON5 compatibility)
+            cleaned = _strip_json_comments(content)
+            return json.loads(cleaned)
     except (json.JSONDecodeError, IOError, OSError):
         return None
