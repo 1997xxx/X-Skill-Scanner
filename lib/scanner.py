@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
-X Skill Scanner v5.0.0 - 主扫描器
-架构：技能画像 → 自适应扫描 → 误报预过滤 → LLM 二次审查 → 最终裁决
+X Skill Scanner v6.0.0 - 主扫描器
+架构：技能画像 → 自适应扫描 → 误报预过滤 → SubAgent 二次审查 → 最终裁决
 
 版本演进:
 - v3.x: 逐步叠加 12 层检测引擎（详见 CHANGELOG.md）
 - v4.0: LLM 二次审查引擎 — 规则引擎高召回 + LLM 高精度 = 低误报不漏报
 - v4.1: 技能画像 + 误报预过滤 + 自适应扫描策略 + 跨层关联
 - v5.0: 画像驱动自适应扫描 + LLM 批量审查 + 跨层关联分析 + 风险评分升级
+- v6.0: SubAgent 多 Agent 审查 + 统一数据模型 + 启发式降级
 """
 
 import os
@@ -19,7 +20,6 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional
 from dataclasses import dataclass, asdict
-from dataclasses import asdict
 
 
 def _p(*args, **kwargs):
@@ -42,7 +42,7 @@ from threat_intel import ThreatIntelligence
 from reporter import ReportGenerator
 from risk_scorer import RiskScorer
 from whitelist import WhitelistManager
-from i18n import I18n, set_lang as set_i18n_lang
+from i18n import I18n
 
 # v3.0 新引擎
 from deobfuscator import Deobfuscator
