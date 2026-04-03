@@ -1668,6 +1668,25 @@ def main():
     parser.add_argument('--profile-only', action='store_true', help='仅输出技能画像后退出')
     parser.add_argument('--deep-analysis', action='store_true', help='深度分析模式：输出结构化审查报告供子 Agent 消费')
 
+    # ─── v6.3: Mode A Batch Scanning ────────────────────────────────
+    parser.add_argument(
+        '--mode',
+        choices=['single', 'batch'],
+        default='single',
+        help='扫描模式：single(默认单技能)|batch(批量扫描平台所有技能)',
+    )
+    parser.add_argument(
+        '--platform',
+        choices=['openclaw', 'codebuddy', 'cursor', 'windsurf', 'claude', 'qclaw', 'workbuddy', 'auto'],
+        default='auto',
+        help='目标平台 (Mode A 批量扫描时使用)',
+    )
+    parser.add_argument(
+        '--summary-only',
+        action='store_true',
+        help='仅输出汇总表格 (Mode A 批量扫描)',
+    )
+
     args = parser.parse_args()
 
     # 处理 URL 扫描
@@ -1701,9 +1720,10 @@ def main():
             _p(f"❌ 下载失败: {e}")
             sys.exit(1)
 
-    if not target_path:
-        parser.error("请指定 -t/--target 或 --url")
-
+    if not target_path and args.mode != 'batch':
+        parser.error("请指定 -t/--target 或 --url (或使用 --mode batch 批量扫描平台所有技能)")
+    
+    # ─── Create Scanner (before Mode A/B check) ───────────────────
     # 创建扫描器
     scanner = SkillScanner(
         enable_semantic=not args.no_semantic,
@@ -1723,20 +1743,123 @@ def main():
         try:
             scanner.enable_llm_review = True
             scanner.llm_reviewer = SubAgentReviewer(
-                target=Path(target_path) if Path(target_path).exists() else None,
+                target=Path(target_path) if target_path and Path(target_path).exists() else None,
                 skill_info={}
             )
             _p("🤖 SubAgent 二次审查已启用（v6.0）")
         except Exception as e:
-            _p(f"⚠️  SubAgent 审查初始化失败: {e}，将跳过审查")
+            _p(f"⚠️  SubAgent 审查初始化失败：{e}，将跳过审查")
             scanner.enable_llm_review = False
     else:
-        _p("⚠️  LLM 二次审查已禁用")
+        _p("⚠️  LLM 二次审查已禁用 (会将 LLM 审查降级为启发式审查)")
     
     # v5.0: 误报预过滤器（默认启用）
     if args.no_fp_filter:
         scanner.fp_filter = None
         _p("⚠️  误报预过滤器已禁用")
+    # ─── End Create Scanner ─────────────────────────────────────
+
+    # ─── v6.3: Mode A Batch Scanning ────────────────────────────────
+    if args.mode == 'batch':
+        _p("\n🔍 Mode A: 批量扫描平台所有技能\n")
+        
+        # Import platform discovery
+        try:
+            from platform_discovery import discover_skills, PlatformDiscoverer
+        except ImportError:
+            _p("❌ 无法导入平台发现模块 (platform_discovery.py)")
+            sys.exit(1)
+        
+        # Detect platform
+        platform = args.platform if args.platform != 'auto' else None
+        discoverer = PlatformDiscoverer(platform)
+        detected_platform = discoverer.detect_platform() if platform is None else platform
+        
+        _p(f"📊 平台：{detected_platform}")
+        
+        # Discover skills
+        skills = discoverer.get_skill_paths(detected_platform)
+        if not skills:
+            _p("❌ 未发现任何技能")
+            sys.exit(0)
+        
+        _p(f"📦 发现 {len(skills)} 个技能\n")
+        
+        # Scan all skills
+        results = []
+        for skill_path, source in skills:
+            _p(f"\n{'='*60}")
+            _p(f"扫描：{skill_path.name} ({source})")
+            _p(f"{'='*60}\n")
+            
+            try:
+                result = scanner.scan(str(skill_path))
+                result['skill_source'] = source
+                results.append(result)
+            except Exception as e:
+                _p(f"❌ 扫描失败：{e}")
+                results.append({
+                    'target': str(skill_path),
+                    'skill_name': skill_path.name,
+                    'skill_source': source,
+                    'error': str(e),
+                    'risk_level': 'ERROR',
+                })
+        
+        # Output summary
+        _p("\n" + "="*70)
+        _p("📊 批量扫描结果汇总")
+        _p("="*70)
+        
+        # Sort by risk level
+        risk_order = {'EXTREME': 0, 'HIGH': 1, 'MEDIUM': 2, 'LOW': 3, 'SAFE': 4, 'ERROR': 5}
+        results.sort(key=lambda r: risk_order.get(r.get('risk_level', 'ERROR'), 5))
+        
+        # Print summary table
+        _p(f"\n共扫描 {len(results)} 个 Skill：\n")
+        _p(f"{'#':<4} {'Skill 名称':<30} {'来源':<15} {'检测结果'}")
+        _p("-" * 70)
+        
+        for i, result in enumerate(results, 1):
+            skill_name = result.get('skill_name', result.get('target', '?'))[:28]
+            source = result.get('skill_source', '?')
+            risk_level = result.get('risk_level', '?')
+            
+            if risk_level in ('EXTREME', 'HIGH', 'ERROR'):
+                verdict = f"🔴 {risk_level}"
+            elif risk_level == 'MEDIUM':
+                verdict = f"⚠️  {risk_level}"
+            else:
+                verdict = f"✅ {risk_level}"
+            
+            _p(f"{i:<4} {skill_name:<30} {source:<15} {verdict}")
+        
+        # Output details for high-risk skills
+        if not args.summary_only:
+            high_risk = [r for r in results if r.get('risk_level') in ('EXTREME', 'HIGH')]
+            if high_risk:
+                _p("\n" + "="*70)
+                _p("🔴 高风险技能详情")
+                _p("="*70)
+                
+                for result in high_risk:
+                    _p(f"\n## {result.get('skill_name', '?')}")
+                    _p(f"风险等级：{result.get('risk_level', '?')}")
+                    if result.get('findings'):
+                        _p(f"发现 {len(result['findings'])} 个问题")
+        
+        # Save report
+        if args.output:
+            output_path = Path(args.output)
+            if args.format == 'json':
+                import json
+                output_path.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding='utf-8')
+                _p(f"\n📄 报告已保存：{output_path}")
+        
+        sys.exit(0)
+    # ─── End Mode A ────────────────────────────────────────────────
+
+    # 创建扫描器
 
     # 基线专用模式
     if args.baseline_only and scanner.baseline_tracker:
