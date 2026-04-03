@@ -202,10 +202,61 @@ class ThreatIntelligence:
         if any(re.search(m, stripped) for m in ui_markers):
             return True
         
+        # v5.5.2: Markdown 表格单元格（如 "| `$N` | Shorthand ..."）
+        if stripped.startswith('| ') and '`' in stripped:
+            return True
+        
+        # v5.5.2: OpenClaw 工具权限声明（如 "allowed-tools: Read, Bash"）
+        if re.search(r'allowed-tools|forbidden-tools', stripped):
+            return True
+        
+        # v5.5.2: npm postinstall 脚本（OpenClaw 标准安装机制）
+        if 'postinstall' in stripped.lower() and ('npm' in stripped.lower() or 'node_modules' in stripped.lower()):
+            return True
+        
+        # v5.5.2: .env.example 或 .env.sample 中的示例配置（非真实凭证）
+        if '.env.example' in stripped or '.env.sample' in stripped:
+            return True
+        
+        # v5.5.2: os.environ.items() — 安全的环境变量遍历（非凭证窃取）
+        if 'os.environ.items()' in stripped or 'os.environ.copy()' in stripped:
+            return True
+        # Safe env filtering: {k: v for k, v in os.environ.items() if ...}
+        if re.search(r'os\.environ\.items\(\)', stripped):
+            return True
+        
+        # v5.5.2: 跳过函数定义行 — 函数定义本身不是攻击行为
+        if re.match(r'^(async\s+)?function\s+\w+\s*\(', stripped):
+            return True
+        
+        # v5.5.2: Markdown 表格单元格（如 "| `$N` | Shorthand ..."）
+        if stripped.startswith('| ') and '`' in stripped:
+            return True
+        
         # 4. 纯字符串字面量（无函数调用/赋值逻辑）
         if (stripped.startswith('"') or stripped.startswith("'")):
             if not any(kw in stripped for kw in ['def ', 'class ', 'import ', 'return ', 'if ', 'for ', 'while ']):
                 return True
+        
+        # v5.5.2: OpenClaw 工具权限声明（如 "allowed-tools: Read, Bash"）
+        if re.search(r'allowed-tools|forbidden-tools', stripped):
+            return True
+        
+        # v5.5.2: npm postinstall 脚本（OpenClaw 标准安装机制）
+        if 'postinstall' in stripped.lower() and ('npm' in stripped.lower() or 'node_modules' in stripped.lower()):
+            return True
+        
+        # v5.5.2: .env.example 或 .env.sample 中的示例配置（非真实凭证）
+        if '.env.example' in stripped or '.env.sample' in stripped:
+            return True
+        
+        # v5.5.2: os.environ.items() / os.environ.copy() — 安全的环境变量遍历
+        if re.search(r'os\.environ\.(items|copy|keys|values)\s*\(', stripped):
+            return True
+        
+        # v5.5.2: 跳过函数定义行 — 函数定义本身不是攻击行为
+        if re.match(r'^(async\s+)?function\s+\w+\s*\(', stripped):
+            return True
         
         # 5. Shell 脚本中的配置检查逻辑（非凭证窃取）
         # 例如: auth_config.get('token', '') 或 echo "clientSecret": "app_secret"
@@ -335,14 +386,38 @@ class ThreatIntelligence:
                         # 规则 D: 单独的 `.env` / `token` / `secret` 关键词太宽泛
                         # 仅当没有其他安全上下文时才保留原始严重度
                         elif indicator in ('.env', 'password', 'secret', 'token', 'API_KEY'):
-                            # 这些单关键词太容易误报，需要额外证据
-                            # 检查是否有真正的恶意行为（文件读取 + 网络发送组合）
-                            has_file_read = any(re.search(r'(?:open|readFile|cat|fs\.read)', l) for l in lines)
-                            has_net_send = any(re.search(r'(?:requests\.|fetch\(|urllib|httpx|curl|wget)', l) for l in lines)
-                            if not (has_file_read and has_net_send):
-                                # 只有单个关键词，没有完整攻击链 → 降级
-                                effective_severity = 'MEDIUM' if severity in ('CRITICAL', 'HIGH') else severity
-                                downgrade_reason = 'broad_indicator_no_attack_chain'
+                            # v5.5.2: 跳过 LLM token 计数上下文
+                            is_llm_token = False
+                            if indicator == 'token':
+                                llm_patterns = [
+                                    r'\d+\s*[KkMm]?\s*tokens?',     # 100 tokens, ~1K tokens
+                                    r'token.*\d+[KkMm+]',              # Token | 52K+
+                                    r'\d+[KkMm+].*token',              # 52K+ ... token
+                                    r'total_tokens|prompt_tokens|completion_tokens',
+                                    r'token_usage|token_count|token_savings|estimated_tokens',
+                                    r'_tokens["\s:]',                  # _tokens suffix
+                                    r'tokenize',                         # tokenize function
+                                    r'Token\s*节[省耗]',                # Chinese: token savings
+                                    r'"token"\s*\|',                   # Markdown table header
+                                    r'\|\s*Token\b',                  # | Token |
+                                    r'max_tokens|budget_tokens|min_tokens|top_tokens',  # LLM API params
+                                    r'\btime_seconds,\s*tokens,\s*tool_calls',  # Metric lists
+                                    r'\btokens,\s*tool_calls',         # metric listing
+                                    r'_tokens"',                         # JSON key suffix
+
+                                ]
+                                is_llm_token = any(re.search(p, matched_stripped, re.I) for p in llm_patterns)
+                                if is_llm_token:
+                                    effective_severity = 'INFO'
+                                    downgrade_reason = 'llm_token_count_not_credential'
+                            
+                            # ⚠️ 如果已经是 INFO (LLM token)，不要再覆盖
+                            if not is_llm_token:
+                                has_file_read = any(re.search(r'(?:open|readFile|cat|fs\.read)', l) for l in lines)
+                                has_net_send = any(re.search(r'(?:requests\.|fetch\(|urllib|httpx|curl|wget)', l) for l in lines)
+                                if not (has_file_read and has_net_send):
+                                    effective_severity = 'MEDIUM' if severity in ('CRITICAL', 'HIGH') else severity
+                                    downgrade_reason = 'broad_indicator_no_attack_chain'
                         
                         match_info = {
                             'pattern_id': pattern_id,
