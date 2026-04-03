@@ -62,6 +62,7 @@ from credential_theft_detector import CredentialTheftDetector
 
 # v4.0/v5.0 新增引擎 — LLM 二次审查
 from llm_reviewer import LLMReviewer
+from subagent_reviewer import SubAgentReviewer
 
 # v5.0 新增引擎 — 技能画像 + 误报预过滤
 from skill_profiler import SkillProfiler
@@ -1119,26 +1120,44 @@ class SkillScanner:
             else:
                 _p("\n⚠️  误报预过滤器已禁用，跳过")
             
-            # 步骤 2: LLM 批量审查（v5.0 — 按文件分组，减少 API 调用）
+            # 步骤 2: LLM/SubAgent 审查（v6.0 — 基于 sessions_spawn，兼容全平台）
             llm_threshold = self._get_llm_review_threshold(all_findings)
             if self.enable_llm_review and self.llm_reviewer and all_findings and llm_threshold != "NEVER":
-                _p("\n🤖 v5.0 LLM 批量审查...")
+                _p("\n🤖 v6.0 SubAgent 智能审查...")
                 try:
-                    filtered_findings, reviews = self.llm_reviewer.filter_findings_batch(
-                        all_findings, str(target), threshold=llm_threshold
-                    )
-                    llm_review_summary = self.llm_reviewer.get_review_summary(reviews)
-
-                    llm_fp = llm_review_summary["by_verdict"].get("FP", 0)
-                    llm_tp = llm_review_summary["by_verdict"].get("TP", 0)
-                    llm_hr = llm_review_summary["by_verdict"].get("HUMAN_REVIEW", 0)
-
-                    _p(f"   LLM批量审查: {len(all_findings)} 条 → "
-                       f"{llm_fp} 误报 | {llm_tp} 真实威胁 | {llm_hr} 需人工审查")
-
-                    all_findings = filtered_findings
+                    # Update reviewer with target info
+                    self.llm_reviewer.target = target
+                    self.llm_reviewer.skill_info = {
+                        'name': getattr(self, '_skill_name', target.name),
+                        'type': getattr(self, '_skill_type', 'unknown'),
+                        'file_count': total_files,
+                        'trust_score': getattr(self, '_trust_score', 50),
+                    }
+                    
+                    # Review findings
+                    reviews = self.llm_reviewer.review(all_findings, use_subagent=True)
+                    
+                    # Filter out FP findings
+                    fp_count = sum(1 for r in reviews if r.verdict == 'FP')
+                    tp_count = sum(1 for r in reviews if r.verdict == 'TP')
+                    hr_count = sum(1 for r in reviews if r.verdict == 'HUMAN_REVIEW')
+                    
+                    _p(f"   审查结果: {len(all_findings)} 条 → "
+                       f"{fp_count} 误报 | {tp_count} 真实威胁 | {hr_count} 需人工审查")
+                    
+                    # Keep only TP and HUMAN_REVIEW findings
+                    fp_ids = {id(r.original_finding) for r in reviews if r.verdict == 'FP'}
+                    all_findings = [f for f in all_findings if id(f) not in fp_ids]
+                    
+                    llm_review_summary = {
+                        'total': len(reviews),
+                        'fp': fp_count,
+                        'tp': tp_count,
+                        'human_review': hr_count,
+                        'mode': self.llm_reviewer.mode,
+                    }
                 except Exception as e:
-                    _p(f"   ⚠️  LLM 批量审查失败: {e}，使用预过滤结果")
+                    _p(f"   ⚠️  SubAgent 审查失败: {e}，使用预过滤结果")
 
         # ─── 计算风险分数 ──────────────────────────────────────
         risk_score = self._calculate_risk_score(all_findings)
@@ -1622,14 +1641,17 @@ def main():
         enable_whitelist=not args.no_whitelist,
     )
     
-    # v5.0: LLM 批量审查（默认启用，可用 --no-llm-review 禁用）
+    # v6.0: SubAgent 二次审查（默认启用，可用 --no-llm-review 禁用）
     if not args.no_llm_review:
         try:
             scanner.enable_llm_review = True
-            scanner.llm_reviewer = LLMReviewer()
-            _p("🤖 LLM 二次审查已启用（默认）")
+            scanner.llm_reviewer = SubAgentReviewer(
+                target=Path(target_path) if Path(target_path).exists() else None,
+                skill_info={}
+            )
+            _p("🤖 SubAgent 二次审查已启用（v6.0）")
         except Exception as e:
-            _p(f"⚠️  LLM 审查初始化失败: {e}，将跳过 LLM 审查")
+            _p(f"⚠️  SubAgent 审查初始化失败: {e}，将跳过审查")
             scanner.enable_llm_review = False
     else:
         _p("⚠️  LLM 二次审查已禁用")
