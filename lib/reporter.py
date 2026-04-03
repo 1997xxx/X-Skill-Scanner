@@ -131,6 +131,7 @@ class ReportGenerator:
                 'entropy_analysis': '📊 熵值分析',
                 'install_hook_detection': '🔧 安装钩子检测',
                 'network_profiling': '🌐 网络行为画像',
+                'social_engineering': '📋 社会工程学检测',
             }
             lines.append('')
             lines.append('各引擎检出 / Findings by Engine:')
@@ -180,6 +181,7 @@ class ReportGenerator:
             'entropy_analysis': ('📊 熵值分析', 'Entropy Analysis'),
             'install_hook_detection': ('🔧 安装钩子', 'Install Hooks'),
             'network_profiling': ('🌐 网络画像', 'Network Profiling'),
+            'social_engineering': ('📋 社会工程学检测', 'Social Engineering'),
             'threat_intel': ('🛡️ 威胁情报', 'Threat Intel'),
             'credential_theft_detection': ('🔐 凭证窃取检测', 'Credential Theft'),
             'correlation_engine': ('🔗 关联分析', 'Correlation Engine'),
@@ -191,7 +193,7 @@ class ReportGenerator:
         layer_order = ['deobfuscation', 'static_analysis', 'ast_analysis', 
                        'semantic_audit', 'entropy_analysis', 
                        'install_hook_detection', 'network_profiling',
-                       'threat_intel', 'credential_theft_detection', 
+                       'social_engineering', 'threat_intel', 'credential_theft_detection', 
                        'correlation_engine']
         
         for src_key in layer_order:
@@ -661,6 +663,7 @@ class ReportGenerator:
             'entropy_analysis': ('&#x1F4CA; 熵值分析','Entropy Analysis'),
             'install_hook_detection': ('&#x1F527; 安装钩子','Install Hooks'),
             'network_profiling': ('&#x1F310; 网络画像','Network Profiling'),
+            'social_engineering': ('&#x1F4CB; 社会工程学检测','Social Engineering'),
             'threat_intel': ('&#x1F6E1;&#xFE0F; 威胁情报','Threat Intel'),
             'credential_theft_detection': ('&#x1F510; 凭证窃取检测','Credential Theft'),
             'correlation_engine': ('&#x1F517; 关联分析','Correlation Engine'),
@@ -668,7 +671,7 @@ class ReportGenerator:
         
         layer_order = ['deobfuscation','static_analysis','ast_analysis','semantic_audit',
                        'entropy_analysis','install_hook_detection','network_profiling',
-                       'threat_intel','credential_theft_detection','correlation_engine']
+                       'social_engineering','threat_intel','credential_theft_detection','correlation_engine']
         
         html += '<h2>&#x1F4CA; 各层检测结果 / Layer-by-Layer Results</h2>\n'
         html += '<table>\n<tr><th>防御层 / Layer</th><th>结果 / Result</th></tr>\n'
@@ -688,7 +691,7 @@ class ReportGenerator:
             if href:
                 html += '<tr class="'+cls+'"><td>'+label_cn+'</td>'
                 html += '<td style="color:%s;font-weight:600"><a href="#f%d">%s</a></td></tr>' % (
-                    row_color, idx, str(len(findings_grouped)))
+                    row_color, i, str(len(findings_grouped)))
             else:
                 html += '<tr class="'+cls+'"><td>'+label_cn+'</td><td style="color:'+row_color+';font-weight:600">'+status+'</td></tr>\n'
         html += '</table>\n'
@@ -825,6 +828,7 @@ class ReportGenerator:
             'entropy_analysis': '📊 熵值分析 / Entropy Analysis',
             'install_hook_detection': '🔧 安装钩子 / Install Hooks',
             'network_profiling': '🌐 网络画像 / Network Profiling',
+            'social_engineering': '📋 社会工程学检测 / Social Engineering',
             'threat_intel': '🛡️ 威胁情报 / Threat Intel',
             'credential_theft_detection': '🔐 凭证窃取检测 / Credential Theft',
             'correlation_engine': '🔗 关联分析 / Correlation Engine',
@@ -832,7 +836,7 @@ class ReportGenerator:
         
         layer_order = ['deobfuscation','static_analysis','ast_analysis','semantic_audit',
                        'entropy_analysis','install_hook_detection','network_profiling',
-                       'threat_intel','credential_theft_detection','correlation_engine']
+                       'social_engineering','threat_intel','credential_theft_detection','correlation_engine']
         
         source_map = r.get('findings_by_source',{})
         lines.append('### 各层检测结果 / Layer-by-Layer Results')
