@@ -524,7 +524,6 @@ class StaticAnalyzer:
                             file_path=str(file_path),
                             line_number=line_num,
                             severity=Severity[rule['severity']] if isinstance(rule['severity'], str) else rule['severity'],
-                            finding_type=FindingType.MALICIOUS_PATTERN,
                             rule_id=rule['id'],
                             category=category,
                             matched_text=matched_text,
