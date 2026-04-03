@@ -167,7 +167,7 @@ class SemanticAuditor:
         return None
 
     def _call_openai_compat(self, prompt, system_prompt, max_tokens, temperature):
-        # ✅ 关键修复：根据 api_type 选择正确的请求格式
+        # ✅ 根据 api_type 选择正确的请求格式和端点
         api_type = getattr(self, 'provider_api_type', 'openai-chat')
         
         if api_type == 'openai-completions':
@@ -194,19 +194,17 @@ class SemanticAuditor:
                 "temperature": temperature,
             }
         
-        # 根据 api_type 选择正确的端点
+        # ⭐ 关键修复：baseUrl 通常已是完整 URL，不盲目追加后缀
+        # 只在明确缺少路径时才追加（保守策略）
         url = self.provider_url.rstrip('/')
         if api_type == 'openai-completions':
-            if not (url.endswith('/completions') or url.endswith('/v1/completions')):
-                if '/v1' in url:
-                    url = f"{url}/completions"
-                else:
+            if not url.endswith('/completions'):
+                # 只有当 baseUrl 看起来是根路径时才追加
+                if '/v1' not in url and '/api/' not in url:
                     url = f"{url}/v1/completions"
         else:
-            if not (url.endswith('/chat/completions') or url.endswith('/v1/chat/completions')):
-                if '/v1' in url:
-                    url = f"{url}/chat/completions"
-                else:
+            if not url.endswith('/chat/completions'):
+                if '/v1' not in url and '/api/' not in url:
                     url = f"{url}/v1/chat/completions"
         
         req = urllib.request.Request(

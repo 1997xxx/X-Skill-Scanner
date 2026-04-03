@@ -52,18 +52,37 @@ def _infer_api_type(prov_cfg: dict) -> str:
     return mapping.get(api_field, 'openai-chat')
 
 
-def _probe_api(base_url: str, api_key: str, model_id: str, api_type: str) -> Optional[Dict]:
-    """探测 API 端点，返回可用配置或 None"""
-    base = base_url.rstrip('/')
+def _build_probe_candidates(base_url: str, api_type: str) -> list[str]:
+    """根据 API 类型构建候选探测 URL 列表
     
-    # 构建候选 URL 列表
+    策略：baseUrl 本身优先（很多自定义端点已是完整 URL），
+    然后才尝试拼接标准后缀。
+    
+    openai-completions → /completions (baseUrl 通常已有 /v1)
+    openai-chat        → /chat/completions
+    anthropic-messages → baseUrl 通常已是完整路径
+    """
+    base = base_url.rstrip('/')
     candidates = []
-    if '/api/' in base:
-        root = base[:base.index('/api/')]
-        candidates.append(f'{root}/v1/chat/completions')
-    if not base.endswith('/v1/chat/completions'):
-        candidates.append(f'{base}/v1/chat/completions')
+    
+    # ⭐ 始终首先尝试 baseUrl 本身（自定义端点往往已经是完整 URL）
     candidates.append(base)
+    
+    if api_type == 'openai-completions':
+        # 如果 baseUrl 以 /v1 结尾，追加 /completions
+        if base.endswith('/v1'):
+            candidates.append(f'{base}/completions')
+        # 否则尝试从 /api/ 提取根 URL 再拼接
+        elif '/api/' in base:
+            root = base[:base.index('/api/')]
+            candidates.append(f'{root}/v1/completions')
+    elif api_type == 'openai-chat':
+        if base.endswith('/v1'):
+            candidates.append(f'{base}/chat/completions')
+        elif '/api/' in base:
+            root = base[:base.index('/api/')]
+            candidates.append(f'{root}/v1/chat/completions')
+    # anthropic-messages 等不需要额外拼接
     
     # 去重保序
     seen = set()
@@ -72,8 +91,20 @@ def _probe_api(base_url: str, api_key: str, model_id: str, api_type: str) -> Opt
         if c not in seen:
             seen.add(c)
             unique.append(c)
+    return unique
+
+
+def _probe_api(base_url: str, api_key: str, model_id: str, api_type: str) -> Optional[Dict]:
+    """探测 API 端点，返回可用配置或 None
     
-    for url in unique:
+    根据 api_type 使用正确的请求格式：
+    - openai-completions: {model, prompt, max_tokens}
+    - openai-chat: {model, messages, max_tokens}
+    - anthropic-messages: {model, system, messages, max_tokens}
+    """
+    candidates = _build_probe_candidates(base_url, api_type)
+    
+    for url in candidates:
         try:
             if api_type == 'anthropic-messages':
                 payload = {
@@ -92,7 +123,24 @@ def _probe_api(base_url: str, api_key: str, model_id: str, api_type: str) -> Opt
                     },
                     method='POST',
                 )
+            elif api_type == 'openai-completions':
+                # ✅ Completions 格式：使用 prompt 而非 messages
+                payload = {
+                    'model': model_id,
+                    'prompt': 'hi',
+                    'max_tokens': 10,
+                }
+                req = urllib.request.Request(
+                    url,
+                    data=json.dumps(payload).encode('utf-8'),
+                    headers={
+                        'Content-Type': 'application/json',
+                        'Authorization': f'Bearer {api_key}',
+                    },
+                    method='POST',
+                )
             else:
+                # openai-chat (默认)
                 payload = {
                     'model': model_id,
                     'max_tokens': 10,
@@ -110,13 +158,15 @@ def _probe_api(base_url: str, api_key: str, model_id: str, api_type: str) -> Opt
             
             with urllib.request.urlopen(req, timeout=10) as resp:
                 body = json.loads(resp.read().decode('utf-8'))
-                detected_type = api_type if api_type != 'openai-chat' else 'openai-chat'
+                # Completions: {choices: [{text, ...}]}
+                # Chat: {choices: [{message: {content}}]}
+                # Anthropic: {content: [{text}]}
                 if 'choices' in body or 'content' in body:
                     return {
                         'url': url,
                         'key': api_key,
                         'model': model_id,
-                        'type': detected_type,
+                        'type': api_type,
                     }
         except Exception:
             continue
@@ -124,14 +174,48 @@ def _probe_api(base_url: str, api_key: str, model_id: str, api_type: str) -> Opt
     return None
 
 
+def _try_one_provider(prov_id: str, prov_cfg: dict, model_id: str) -> Optional[Dict]:
+    """尝试单个 provider，探测成功则返回配置，失败返回 None"""
+    api_key = prov_cfg.get('apiKey')
+    base_url = prov_cfg.get('baseUrl')
+    if not (api_key and base_url):
+        return None
+    
+    models_list = prov_cfg.get('models', [])
+    all_ids = [m.get('id', '') for m in models_list]
+    if not all_ids:
+        return None
+    
+    # 如果指定了 model_id 且不在列表中，跳过（除非列表为空 — 支持动态模型）
+    if model_id and model_id not in all_ids:
+        return None
+    
+    actual_model = model_id or all_ids[0]
+    api_type = _infer_api_type(prov_cfg)
+    
+    detected = _probe_api(base_url, api_key, actual_model, api_type)
+    if detected:
+        return detected
+    
+    # 探测失败但仍可 fallback 使用配置值
+    return {
+        'url': base_url,
+        'key': api_key,
+        'model': actual_model,
+        'type': api_type,
+    }
+
+
 def discover_provider(force: bool = False) -> Optional[Dict]:
     """
     自动发现 LLM provider 配置
     
+    策略：优先使用 agents.defaults.model.primary，探测不通时优雅回退到前 3 个 provider。
+    
     优先级:
     1. 环境变量 OPENAI_BASE_URL + OPENAI_API_KEY
-    2. OpenClaw 默认模型对应的 provider（agents.defaults.model.primary）
-    3. 遍历所有 provider，取第一个能探测通的
+    2. agents.defaults.model.primary → models.providers.<provider_id>
+    3. 遍历前 3 个 provider（按配置顺序），取第一个通的
     
     返回 dict: {url, key, model, type} 或 None
     """
@@ -171,7 +255,7 @@ def discover_provider(force: bool = False) -> Optional[Dict]:
         _p("⚠️  openclaw.json 中未找到 models.providers")
         return None
     
-    # 获取默认模型引用
+    # ─── 读取默认模型引用 ──────────────────────────────────
     default_prov_id = None
     default_model_id = None
     try:
@@ -182,78 +266,61 @@ def discover_provider(force: bool = False) -> Optional[Dict]:
     except (AttributeError, TypeError):
         pass
     
-    # 构建反向映射
+    # 构建 model→provider 反向映射（用于跨 provider 别名解析）
     model_to_prov = {}
-    prov_models = {}
     for prov_id, prov_cfg in providers.items():
-        models_list = prov_cfg.get('models', [])
-        if models_list:
-            all_ids = [m.get('id', '') for m in models_list]
-            prov_models[prov_id] = {'first': all_ids[0], 'all': all_ids}
-            for mid in all_ids:
+        for m in prov_cfg.get('models', []):
+            mid = m.get('id', '')
+            if mid:
                 model_to_prov[mid] = prov_id
     
-    # 解析首选 provider + model（支持跨 provider 别名）
-    preferred_prov_id = default_prov_id
-    preferred_model_id = default_model_id
-    
-    if default_model_id and default_model_id in model_to_prov:
-        resolved_prov = model_to_prov[default_model_id]
+    # ─── Phase 1: 尝试 default provider ────────────────────
+    if default_prov_id and default_model_id:
+        # 如果 model 实际在另一个 provider 下，优先用那个
+        resolved_prov = model_to_prov.get(default_model_id, default_prov_id)
         if resolved_prov != default_prov_id:
-            _p(f"🎯 跨 provider 匹配默认模型: {resolved_prov}/{default_model_id}")
-        preferred_prov_id = resolved_prov
-        preferred_model_id = default_model_id
-    elif default_model_id:
-        _p(f"🎯 匹配默认模型: {default_prov_id}/{default_model_id}")
-    
-    # 按优先级排序：首选 provider 排第一
-    ordered_ids = list(providers.keys())
-    if preferred_prov_id and preferred_prov_id in ordered_ids:
-        ordered_ids.remove(preferred_prov_id)
-        ordered_ids.insert(0, preferred_prov_id)
-    
-    # ─── 3. 遍历探测 ──────────────────────────────────────
-    for prov_id in ordered_ids:
-        prov_cfg = providers[prov_id]
-        api_key = prov_cfg.get('apiKey')
-        base_url = prov_cfg.get('baseUrl')
-        models_list = prov_cfg.get('models', [])
+            _p(f"🎯 跨 provider 匹配: {default_prov_id}/{default_model_id} → {resolved_prov}")
         
-        if not (api_key and base_url and models_list):
+        prov_cfg = providers.get(resolved_prov)
+        if prov_cfg:
+            _p(f"🎯 尝试默认: {resolved_prov}/{default_model_id}")
+            result = _try_one_provider(resolved_prov, prov_cfg, default_model_id)
+            if result:
+                _p(f"✅ 默认 provider 可用: {result['model']} [{result['type']}]")
+                _cached_config = result
+                _cache_time = now
+                return result
+            else:
+                _p(f"⚠️  默认 provider 不通，尝试其他…")
+    
+    # ─── Phase 2: 遍历前 3 个 provider ─────────────────────
+    _p("🔄 回退模式：尝试前 3 个 provider")
+    max_try = 3
+    for i, (prov_id, prov_cfg) in enumerate(providers.items()):
+        if i >= max_try:
+            break
+        
+        # 跳过已经试过的 default provider
+        if prov_id == default_prov_id:
             continue
         
-        info = prov_models.get(prov_id, {})
-        all_ids = info.get('all', [])
+        models_list = prov_cfg.get('models', [])
+        if not models_list:
+            continue
         
-        # 选择 model
-        if prov_id == preferred_prov_id and preferred_model_id in all_ids:
-            model_id = preferred_model_id
-        else:
-            model_id = info.get('first', models_list[0].get('id', ''))
+        first_model = models_list[0].get('id', '')
+        _p(f"   [{i+1}] {prov_id}/{first_model} …", end='', flush=True)
         
-        api_type = _infer_api_type(prov_cfg)
-        
-        # 探测 API
-        detected = _probe_api(base_url, api_key, model_id, api_type)
-        if detected:
-            _p(f"🔌 自动发现 Provider: {prov_id} ({model_id}) [{detected['type']}]")
-            _cached_config = detected
+        result = _try_one_provider(prov_id, prov_cfg, first_model)
+        if result:
+            _p(" ✅")
+            _cached_config = result
             _cache_time = now
-            return detected
-        
-        # Fallback: 使用配置值不探测
-        result = {
-            'url': base_url,
-            'key': api_key,
-            'model': model_id,
-            'type': api_type,
-        }
-        _p(f"🔌 自动发现 Provider: {prov_id} ({model_id}) [fallback: {api_type}]")
-        _cached_config = result
-        _cache_time = now
-        return result
+            return result
+        else:
+            _p(" ❌")
     
-    _p("⚠️  所有 provider 探测失败")
+    _p("⚠️  所有 provider 均不可用")
     return None
 
 
