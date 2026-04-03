@@ -21,6 +21,15 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from dataclasses import dataclass, asdict
 
+# Import shared constants
+from constants import (
+    MAX_RISK_SCORE, MIN_RISK_SCORE,
+    TRUST_THRESHOLD_QUICK, TRUST_THRESHOLD_STANDARD,
+    MAX_FILES_QUICK_MODE, MAX_FILES_STANDARD_MODE,
+    DEFAULT_TIMEOUT_SECONDS, LLM_REVIEW_TIMEOUT_SECONDS,
+    SCANNER_VERSION,
+)
+
 
 def _p(*args, **kwargs):
     """进度输出 — 统一走 stderr，不干扰 JSON/SARIF stdout"""
@@ -465,7 +474,7 @@ class SkillScanner:
                 'verdict': 'BLOCK',
                 'message': pfc_result['message'],
                 'findings': pfc_findings,
-                'risk_score': 100,
+                'risk_score': MAX_RISK_SCORE,
                 'risk_level': 'EXTREME',
                 'total_files': total_files,
                 'pre_flight_findings': pfc_result['findings'],
@@ -506,7 +515,7 @@ class SkillScanner:
             profile = self._skill_profile
             _p(f"   技能: {profile.name} | 作者: {profile.author or '未知'} | "
                f"类型: {profile.skill_type} | 文件: {profile.file_count}")
-            _p(f"   信任分数: {profile.trust_score}/100 | "
+            _p(f"   信任分数: {profile.trust_score}/MAX_RISK_SCORE | "
                f"推荐策略: {profile.scan_strategy} | "
                f"红旗: {len(profile.risk_fingerprint.get('red_flags', []))}")
             
@@ -1738,7 +1747,7 @@ def main():
 
         _p(f"\n{'=' * 60}")
         _p(f"📦 技能: {skill_name}")
-        _p(f"   风险等级: {risk_level} ({risk_score}/100)")
+        _p(f"   风险等级: {risk_level} ({risk_score}/MAX_RISK_SCORE)")
         _p(f"   扫描结论: {verdict}")
         _p(f"{'=' * 60}")
 
