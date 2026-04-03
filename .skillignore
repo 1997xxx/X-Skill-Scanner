@@ -1,0 +1,38 @@
+# X-Skill-Scanner Package Ignore File
+# Used when creating .skill distribution packages
+
+# Documentation files (keep SKILL.md only)
+README.md
+README_CH.md
+CHANGELOG.md
+CONTRIBUTING.md
+SECURITY.md
+
+# Development files
+.github/
+tests/
+reports/
+*.pyc
+__pycache__/
+.pytest_cache/
+*.pyo
+*.pyd
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git files
+.git/
+.gitignore
+
+# Keep these:
+# !SKILL.md
+# !lib/
+# !rules/
+# !data/
+# !references/
+# !assets/
+# !scripts/
