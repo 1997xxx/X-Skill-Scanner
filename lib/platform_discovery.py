@@ -22,6 +22,7 @@ class PlatformDiscoverer:
     
     # Platform skill directories (common defaults)
     PLATFORM_PATHS = {
+        # ─── Mainstream Agent Platforms ──────────────────────────────
         'openclaw': [
             Path.home() / '.openclaw' / 'skills',
             Path.home() / '.openclaw' / 'workspace' / 'skills',
@@ -32,7 +33,7 @@ class PlatformDiscoverer:
         ],
         'cursor': [
             Path.home() / '.cursor' / 'extensions',
-            Path.current / '.cursor' / 'skills' if hasattr(Path, 'current') else Path.cwd() / '.cursor' / 'skills',
+            Path.cwd() / '.cursor' / 'skills',
         ],
         'windsurf': [
             Path.home() / '.windsurf' / 'skills',
@@ -47,6 +48,49 @@ class PlatformDiscoverer:
         ],
         'workbuddy': [
             Path.home() / '.workbuddy' / 'skills',
+        ],
+        
+        # ─── IDE-Based AI Assistants ──────────────────────────────
+        'vscode': [
+            Path.home() / '.vscode' / 'extensions',
+            Path.home() / '.vscode' / 'ai-skills',
+        ],
+        'jetbrains': [
+            Path.home() / '.local' / 'share' / 'JetBrains' / 'AIAssistant',
+            Path.home() / 'Library' / 'Application Support' / 'JetBrains' / 'AIAssistant',
+        ],
+        
+        # ─── Chinese Developer Platforms ──────────────────────────────
+        'tencent-coding': [
+            Path.home() / '.tencent' / 'coding' / 'skills',
+        ],
+        'aliyun-lingma': [
+            Path.home() / '.aliyun' / 'lingma' / 'skills',
+        ],
+        'baidu-comate': [
+            Path.home() / '.baidu' / 'comate' / 'skills',
+        ],
+        
+        # ─── Open Source Agent Frameworks ──────────────────────────────
+        'langchain': [
+            Path.cwd() / '.langchain' / 'agents',
+            Path.home() / '.langchain' / 'agents',
+        ],
+        'auto-gpt': [
+            Path.cwd() / '.autogpt' / 'agents',
+            Path.home() / '.autogpt' / 'agents',
+        ],
+        'crewai': [
+            Path.cwd() / '.crewai' / 'crews',
+            Path.home() / '.crewai' / 'crews',
+        ],
+        
+        # ─── Enterprise Platforms ──────────────────────────────
+        'gitlab-duo': [
+            Path.home() / '.gitlab' / 'duo' / 'skills',
+        ],
+        'github-copilot': [
+            Path.home() / '.github' / 'copilot' / 'skills',
         ],
     }
     
@@ -65,7 +109,7 @@ class PlatformDiscoverer:
         Auto-detect current platform from environment
         
         Returns:
-            Platform name or 'unknown'
+            Platform name or 'openclaw' (default)
         """
         # Check environment variables
         env_platforms = {
@@ -76,6 +120,16 @@ class PlatformDiscoverer:
             'CLAUDE': 'claude',
             'QCLAW': 'qclaw',
             'WORKBUDDY': 'workbuddy',
+            'VSCODE': 'vscode',
+            'JETBRAINS': 'jetbrains',
+            'TENCENT_CODING': 'tencent-coding',
+            'ALIYUN_LINGMA': 'aliyun-lingma',
+            'BAIDU_COMATE': 'baidu-comate',
+            'LANGCHAIN': 'langchain',
+            'AUTO_GPT': 'auto-gpt',
+            'CREWAI': 'crewai',
+            'GITLAB_DUO': 'gitlab-duo',
+            'GITHUB_COPILOT': 'github-copilot',
         }
         
         for env_var, platform in env_platforms.items():
