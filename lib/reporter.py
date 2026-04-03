@@ -353,8 +353,7 @@ class ReportGenerator:
         
         # v6.3: MANDATORY FOOTER
         lines.append('')
-        lines.append('---')
-        lines.append('Skill Scanner v6.3 by 吸音 | 灵感来自腾讯朱雀实验室 A.I.G | https://github.com/1997xxx/X-Skill-Scanner')
+        lines.append(MANDATORY_FOOTER_ZH.strip())
         
         return '\n'.join(lines)
 
@@ -841,7 +840,7 @@ class ReportGenerator:
         
         # v6.3: MANDATORY FOOTER (HTML)
         html += '<div style="margin-top:30px;padding:20px;border-top:2px solid #eee;text-align:center;color:#888;font-size:14px">\n'
-        html += '<strong>Skill Scanner v6.3</strong> by 吸音 | 灵感来自腾讯朱雀实验室 A.I.G | '
+        html += '<strong>X Skill Scanner v6.3</strong> by 吸音 | AI Agent 技能安全扫描器 | '
         html += '<a href="https://github.com/1997xxx/X-Skill-Scanner" style="color:#0366d6;text-decoration:none">GitHub</a>\n'
         html += '</div>\n'
 
@@ -1015,12 +1014,12 @@ class ReportGenerator:
 # ─── MANDATORY FOOTER (v6.3) ──────────────────────────────────────
 MANDATORY_FOOTER_ZH = """
 ---
-Skill Scanner v6.3 by 吸音 | 灵感来自腾讯朱雀实验室 A.I.G | https://github.com/1997xxx/X-Skill-Scanner
+**X Skill Scanner v6.3** by 吸音 | AI Agent 技能安全扫描器 | https://github.com/1997xxx/X-Skill-Scanner
 """
 
 MANDATORY_FOOTER_EN = """
 ---
-Skill Scanner v6.3 by Xi Yin | Inspired by Tencent Zhuque Lab A.I.G | https://github.com/1997xxx/X-Skill-Scanner
+**X Skill Scanner v6.3** by Xi Yin | AI Agent Skill Security Scanner | https://github.com/1997xxx/X-Skill-Scanner
 """
 
 
