@@ -157,6 +157,80 @@ python3 lib/scanner.py -t ./my-skill/ --format html -o report.html
 python3 lib/scanner.py -t ./my-skill/ --format sarif -o results.sarif
 ```
 
+### Mode A: Batch Scanning All Platform Skills
+
+**New in v6.3** — One-command scan of all skills installed on a platform to quickly identify high-risk skills.
+
+```bash
+# Scan all OpenClaw platform skills
+python3 lib/scanner.py --mode batch --platform openclaw
+
+# Summary only (no detailed expansion)
+python3 lib/scanner.py --mode batch --platform openclaw --summary-only
+
+# Specify platform
+python3 lib/scanner.py --mode batch --platform cursor
+python3 lib/scanner.py --mode batch --platform windsurf
+python3 lib/scanner.py --mode batch --platform codebuddy
+
+# Auto-detect current platform
+python3 lib/scanner.py --mode batch --platform auto
+```
+
+**Example Output:**
+
+```
+🔍 Mode A: Batch Scanning All Platform Skills
+
+📊 Platform: openclaw
+📦 Found 5 skills
+
+============================================================
+Scanning: self-improving (local)
+============================================================
+Scan Complete - Risk Level: LOW
+
+...
+
+======================================================================
+📊 Batch Scan Summary
+======================================================================
+
+Total Skills Scanned: 5
+
+#    Skill Name                       Source          Detection Result
+----------------------------------------------------------------------
+1    self-improving                 local           ✅ LOW
+2    x-skill-scanner                local           ✅ LOW
+3    linkedin-job                   marketplace     🔴 EXTREME
+4    weather-skill                  local           ✅ SAFE
+5    js-literals-protocol           local           ✅ LOW
+
+======================================================================
+🔴 High-Risk Skill Details
+======================================================================
+
+## linkedin-job
+Risk Level: EXTREME
+Issues Found: 8
+   - [CRITICAL] Malicious Skill Name Match (Known Malicious)
+   - [CRITICAL] Base64 Decode then Execute
+   - [HIGH] Requests User Sensitive Credentials
+...
+```
+
+**Supported Platforms:**
+
+| Platform | Detection Paths |
+|----------|----------------|
+| **openclaw** | `~/.openclaw/skills/`, `~/.openclaw/workspace/skills/` |
+| **codebuddy** | `~/.codebuddy/plugins/`, `~/.codebuddy/plugins/marketplaces/` |
+| **cursor** | `~/.cursor/extensions/`, `./.cursor/skills/` |
+| **windsurf** | `~/.windsurf/skills/`, `./.windsurf/skills/` |
+| **claude** | `~/.claude/skills/`, `./.claude/skills/` |
+| **qclaw** | `~/.qclaw/skills/` |
+| **workbuddy** | `~/.workbuddy/skills/` |
+
 ### Configuration
 
 **Zero-config mode:** The scanner auto-discovers LLM Provider from `~/.openclaw/openclaw.json`. No manual setup needed.
@@ -170,6 +244,8 @@ export OPENAI_MODEL="gpt-4o-mini"
 
 ### CLI Options
 
+#### Mode B: Single Skill Scan (Default)
+
 ```
 -t TARGET             Target skill directory or file
 --url URL             Remote skill URL (auto-clones & scans)
@@ -182,7 +258,21 @@ export OPENAI_MODEL="gpt-4o-mini"
 --baseline-only       Check baseline changes only
 --update-baseline     Update baseline after scan
 --profile-only        Output skill profile only
+--lang LANG           Report language: zh(default)/en
 --json                JSON output shortcut
+```
+
+#### Mode A: Batch Scanning
+
+```
+--mode batch          Batch scanning mode
+--platform PLATFORM   Target platform: openclaw/codebuddy/cursor/windsurf/claude/qclaw/workbuddy/auto
+--summary-only        Summary table only (no high-risk details expansion)
+```
+
+**Full Help:**
+```bash
+python3 lib/scanner.py --help
 ```
 
 ---

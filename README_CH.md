@@ -156,6 +156,80 @@ python3 lib/scanner.py -t ./my-skill/ --format html -o report.html
 python3 lib/scanner.py -t ./my-skill/ --format sarif -o results.sarif
 ```
 
+### Mode A：批量扫描平台所有技能
+
+**v6.3 新增功能** — 一键扫描平台安装的所有技能，快速识别高风险技能。
+
+```bash
+# 扫描 OpenClaw 平台所有技能
+python3 lib/scanner.py --mode batch --platform openclaw
+
+# 仅输出汇总表格（不展开详情）
+python3 lib/scanner.py --mode batch --platform openclaw --summary-only
+
+# 指定平台扫描
+python3 lib/scanner.py --mode batch --platform cursor
+python3 lib/scanner.py --mode batch --platform windsurf
+python3 lib/scanner.py --mode batch --platform codebuddy
+
+# 自动检测当前平台
+python3 lib/scanner.py --mode batch --platform auto
+```
+
+**输出示例:**
+
+```
+🔍 Mode A: 批量扫描平台所有技能
+
+📊 平台：openclaw
+📦 发现 5 个技能
+
+============================================================
+扫描：self-improving (local)
+============================================================
+扫描完成 - 风险等级：LOW
+
+...
+
+======================================================================
+📊 批量扫描结果汇总
+======================================================================
+
+共扫描 5 个 Skill：
+
+#    Skill 名称                       来源              检测结果
+----------------------------------------------------------------------
+1    self-improving                 local           ✅ LOW
+2    x-skill-scanner                local           ✅ LOW
+3    linkedin-job                   marketplace     🔴 EXTREME
+4    weather-skill                  local           ✅ SAFE
+5    js-literals-protocol           local           ✅ LOW
+
+======================================================================
+🔴 高风险技能详情
+======================================================================
+
+## linkedin-job
+风险等级：EXTREME
+发现 8 个问题
+   - [CRITICAL] 恶意技能名称匹配 (已知恶意)
+   - [CRITICAL] Base64 解码后直接执行
+   - [HIGH] 要求用户提供敏感凭证
+...
+```
+
+**支持的平台:**
+
+| 平台 | 检测路径 |
+|------|---------|
+| **openclaw** | `~/.openclaw/skills/`, `~/.openclaw/workspace/skills/` |
+| **codebuddy** | `~/.codebuddy/plugins/`, `~/.codebuddy/plugins/marketplaces/` |
+| **cursor** | `~/.cursor/extensions/`, `./.cursor/skills/` |
+| **windsurf** | `~/.windsurf/skills/`, `./.windsurf/skills/` |
+| **claude** | `~/.claude/skills/`, `./.claude/skills/` |
+| **qclaw** | `~/.qclaw/skills/` |
+| **workbuddy** | `~/.workbuddy/skills/` |
+
 ### 配置
 
 **零配置模式：** 扫描器自动从 `~/.openclaw/openclaw.json` 发现 LLM Provider，无需手动设置。
@@ -168,6 +242,8 @@ export OPENAI_MODEL="gpt-4o-mini"
 ```
 
 ### 命令行选项
+
+#### Mode B: 单技能扫描（默认）
 
 ```
 -t TARGET             目标技能目录或文件
@@ -183,6 +259,20 @@ export OPENAI_MODEL="gpt-4o-mini"
 --install             扫描后询问是否安装
 --no-prompt           跳过安装询问（CI/自动化）
 --install-to PATH     指定安装目录
+--lang LANG           报告语言：zh(默认)/en
+```
+
+#### Mode A: 批量扫描
+
+```
+--mode batch          批量扫描模式
+--platform PLATFORM   目标平台：openclaw/codebuddy/cursor/windsurf/claude/qclaw/workbuddy/auto
+--summary-only        仅输出汇总表格（不展开高风险详情）
+```
+
+**完整帮助:**
+```bash
+python3 lib/scanner.py --help
 ```
 
 ---
