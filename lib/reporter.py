@@ -168,6 +168,48 @@ class ReportGenerator:
             
             lines.append('-' * 70)
         
+        # ─── 🚨 CRITICAL FINDINGS HIGHLIGHT (NEW - Top Priority Evidence) ──────────────
+        if rl in ('EXTREME', 'HIGH'):
+            critical_findings = [f for f in r.get('findings', []) if (isinstance(f, dict) and f.get('severity') == 'CRITICAL')]
+            if critical_findings:
+                lines.append('')
+                lines.append('=' * 70)
+                lines.append('🚨 关键威胁证据 / CRITICAL THREAT EVIDENCE')
+                lines.append('=' * 70)
+                lines.append('')
+                lines.append('⚠️  以下是确凿的恶意行为证据 — 强烈建议仔细阅读：')
+                lines.append('')
+                
+                for i, cf in enumerate(critical_findings, 1):
+                    lines.append(f'【CRITICAL-{i}】{cf.get("title", "")}')
+                    fp = cf.get('file_path', '')
+                    ln = cf.get('line_number', 0)
+                    lines.append(f'位置：{fp}:{ln if ln else "N/A"}')
+                    
+                    # Show matched code
+                    if cf.get('matched_line'):
+                        lines.append('')
+                        lines.append('恶意代码:')
+                        lines.append('```')
+                        lines.append(cf.get('matched_line', '')[:500])
+                        lines.append('```')
+                    
+                    # Show decoded content
+                    decoded = cf.get('decoded_content') or cf.get('code_evidence', '')
+                    if decoded and len(decoded) > 20:
+                        lines.append('')
+                        lines.append('🔍 解码后的恶意载荷:')
+                        lines.append('```')
+                        lines.append(decoded[:800])
+                        lines.append('```')
+                    
+                    lines.append('')
+                    lines.append(f'⚠️  威胁说明：{cf.get("description", "")}')
+                    lines.append(f'🔧 修复建议：{cf.get("remediation", "")}')
+                    lines.append('')
+                
+                lines.append('=' * 70)
+        
         # ─── 各层检测结果 ──────────────────────────────────────
         lines.append('')
         lines.append('📊 各层检测结果 / LAYER-BY-LAYER RESULTS')
@@ -232,15 +274,33 @@ class ReportGenerator:
                 loc = f'{fp}:{ln}' if ln else fp
                 badge = f' (x{mc})' if mc > 1 else ''
                 cs = f.get('code_snippet', '') if d else getattr(f, 'code_snippet', '')
+                matched_line = f.get('matched_line', '') if d else getattr(f, 'matched_line', '')
+                code_evidence = f.get('code_evidence', '') if d else getattr(f, 'code_evidence', '')
+                decoded_content = f.get('decoded_content', '') if d else getattr(f, 'decoded_content', '')
                 
                 lines.append(f'')
                 lines.append(f'  #{i}. [{sev}] {ttl}{badge}')
                 lines.append(f'      位置 / Location: {loc}')
                 lines.append(f'      来源 / Source  : {src}')
                 
-                # 格式化描述（保留结构化格式，去除 markdown 代码块）
+                # 代码证据优先显示
+                code_to_show = matched_line or code_evidence or cs or ''
+                if code_to_show:
+                    lines.append('')
+                    lines.append('      📝 检测到的代码:')
+                    for cline in code_to_show.strip()[:500].split('\n'):
+                        lines.append(f'      │ {cline}')
+                
+                # 解码后的恶意内容
+                if decoded_content and len(decoded_content) > 20:
+                    lines.append('')
+                    lines.append('      🔍 解码后的恶意载荷:')
+                    lines.append('      ```')
+                    lines.append(f'      {decoded_content[:600]}')
+                    lines.append('      ```')
+                
+                # 描述 (放在代码后面)
                 clean_desc = re.sub(r'```\n?(.*?)\n?```', r'[CODE BLOCK: \1]', desc, flags=re.DOTALL)
-                # 将换行符转换为缩进换行，保持可读性
                 formatted_lines = []
                 for dline in clean_desc.split('\n'):
                     dline = dline.strip()
@@ -252,12 +312,6 @@ class ReportGenerator:
                 if formatted_lines:
                     lines.append('      描述 / Desc:')
                     lines.extend(formatted_lines)
-                
-                # 代码片段
-                if cs:
-                    lines.append('      代码 / Code:')
-                    for cline in cs.strip().split('\n'):
-                        lines.append(f'      │ {cline}')
                 
                 lines.append(f'      修复 / Fix     : {rem}')
         
@@ -610,6 +664,40 @@ class ReportGenerator:
         total_findings, crit_count, high_count)
         html += '<div class="sumrow"><span class="sumlbl">结论 / Verdict</span><span>'+self._esc(vt)+'</span></div>\n'
         html += '</div>\n'
+        
+        # ─── 🚨 CRITICAL FINDINGS HIGHLIGHT (NEW - Top Priority Evidence) ──────────────
+        if rl in ('EXTREME', 'HIGH'):
+            critical_findings = [f for f in r.get('findings', []) if f.get('severity') == 'CRITICAL']
+            if critical_findings:
+                html += '<div style="margin:30px 0;padding:20px;background:#fff3f3;border:2px solid #dc3545;border-radius:8px">\n'
+                html += '<h2 style="color:#dc3545;margin:0 0 15px;font-size:20px">&#x1F6A8; 关键威胁证据 / CRITICAL THREAT EVIDENCE</h2>\n'
+                html += '<p style="margin:0 0 15px;color:#856404;font-size:14px">&#x26A0;&#xFE0F; 以下是确凿的恶意行为证据 — 强烈建议仔细阅读：</p>\n'
+                
+                for i, cf in enumerate(critical_findings, 1):
+                    html += '<div style="margin-bottom:15px;padding:15px;background:#fff;border-left:4px solid #dc3545">\n'
+                    html += f'<h3 style="margin:0 0 10px;color:#dc3545;font-size:16px">[CRITICAL-{i}] {self._esc(cf.get("title", ""))}</h3>\n'
+                    html += f'<p style="margin:8px 0;font-size:14px"><b>位置:</b> {self._esc(str(cf.get("file_path", "")))}'
+                    if cf.get('line_number'):
+                        html += f':LINE {cf.get("line_number")}'
+                    html += '</p>\n'
+                    
+                    # Show matched code if available
+                    if cf.get('matched_line') or cf.get('code_evidence'):
+                        code = cf.get('matched_line') or cf.get('code_evidence', '')
+                        html += '<p style="margin:8px 0;font-size:13px;color:#333"><b>恶意代码:</b></p>\n'
+                        html += f'<pre style="background:#f8f9fa;padding:10px;border-radius:4px;font-size:13px;overflow-x:auto">%s</pre>' % self._esc(code[:500])
+                    
+                    # Show decoded malicious content if available
+                    decoded = cf.get('decoded_content') or ''
+                    if decoded and len(decoded) > 20:
+                        html += '<p style="margin:8px 0;font-size:13px;color:#dc3545;font-weight:600">&#x1F50D; 解码后的恶意载荷:</p>\n'
+                        html += f'<pre style="background:#blk1105;padding:10px;border-radius:4px;font-size:13px;overflow-x:auto;background:#2d1f1f;color:#ff6b6b">%s</pre>' % self._esc(decoded[:800])
+                    
+                    html += f'<p style="margin:8px 0;font-size:14px;color:#dc3545"><b>⚠️ 威胁说明:</b> {self._esc(cf.get("description", ""))}</p>\n'
+                    html += f'<p style="margin:8px 0;font-size:14px;color:#28a745"><b>🔧 修复建议:</b> {self._esc(cf.get("remediation", ""))}</p>\n'
+                    html += '</div>\n'
+                
+                html += '</div>\n'
         
         # ─── Decoded Malicious Payloads (for HIGH/EXTREME risks) ──────────────
         if rl in ('EXTREME', 'HIGH'):
