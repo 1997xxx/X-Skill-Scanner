@@ -4,10 +4,59 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-v6.0.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v6.3.0-blue.svg)](CHANGELOG.md)
 [![GitHub Stars](https://img.shields.io/github/stars/1997xxx/X-Skill-Scanner?style=social)](https://github.com/1997xxx/X-Skill-Scanner)
 
 📖 [中文文档 →](README_CH.md)
+
+---
+
+## 🆕 What's New in v6.3
+
+**New Features (2026-04-03):**
+
+### 📊 Mode A - Batch Scanning
+Scan all skills installed on a platform with one command, quickly identifying high-risk skills.
+
+```bash
+# Batch scan all OpenClaw platform skills
+python3 lib/scanner.py --mode batch --platform openclaw
+
+# Summary only (no detailed expansion)
+python3 lib/scanner.py --mode batch --platform openclaw --summary-only
+```
+
+### 🌍 Multi-Platform Support - 22 Agent Platforms
+Expanded from 7 to **22 platforms**, covering IDEs, enterprise, and open-source frameworks.
+
+| Category | Platforms |
+|----------|-----------|
+| **Mainstream** | openclaw, codebuddy, cursor, windsurf, claude, qclaw, workbuddy |
+| **IDE AI** | vscode, jetbrains |
+| **China Platforms** | tencent-coding, aliyun-lingma, baidu-comate |
+| **Open Source** | langchain, auto-gpt, crewai |
+| **Enterprise** | gitlab-duo, github-copilot |
+
+### 🈺 Complete i18n Support
+Chinese/English report support with automatic language detection and silent switching.
+
+```bash
+python3 lib/scanner.py -t ./my-skill/ --lang en  # English report
+python3 lib/scanner.py -t ./my-skill/ --lang zh  # 中文报告
+```
+
+### 🧪 Test Coverage
+New `tests/test_platform_discovery.py` - **21 unit tests** with 100% coverage.
+
+```bash
+python3 -m pytest tests/test_platform_discovery.py -v
+# ✅ 21 passed in 0.41s
+```
+
+### 📝 User-Friendly Reports
+- Plain language risk descriptions ("Execute hidden malicious commands" vs "Base64 decode then execute")
+- Clear installation recommendations (🟢 Safe / 🟡 Caution / 🔴 Do Not Install)
+- Mandatory footer for brand consistency
 
 ---
 
