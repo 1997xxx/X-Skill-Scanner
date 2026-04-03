@@ -44,7 +44,7 @@ FALSE_POSITIVE_PATTERNS = [
                 r'dependency_checker\.py', r'path_filter\.py',
                 r'prompt_injection.*\.py', r'entropy_analyzer\.py',
                 r'install_hook_detector\.py', r'network_profiler\.py',
-                r'credential_theft_detector\.py', r'llm_reviewer\.py',
+                r'credential_theft_detector\.py', r'subagent_reviewer\.py',
                 r'semantic_auditor\.py', r'risk_scorer\.py',
                 r'whitelist\.py', r'reporter\.py', r'shield_monitor\.py',
                 r'fp_filter\.py', r'skill_profiler\.py',
