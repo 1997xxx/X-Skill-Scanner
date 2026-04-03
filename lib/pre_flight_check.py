@@ -66,9 +66,26 @@ class PreFlightCheck:
         """
         findings: List[Dict] = []
 
-        # ─── 检查 1: 必须有 SKILL.md ─────────────────────
-        has_skill_md = False
+        # ─── v5.5.1: 检测批量扫描模式（多技能目录）─────────────
+        is_batch_mode = False
+        sub_skills: List[Path] = []
+        
         if target_path.is_dir():
+            # 检查是否包含多个子目录，每个子目录有自己的 SKILL.md
+            sub_dirs = [d for d in target_path.iterdir() if d.is_dir()]
+            for sd in sub_dirs:
+                if (sd / 'SKILL.md').exists():
+                    sub_skills.append(sd)
+            
+            if len(sub_skills) >= 2:
+                is_batch_mode = True
+
+        # ─── 检查 1: 必须有 SKILL.md（单技能模式）────────────
+        has_skill_md = False
+        if is_batch_mode:
+            # 批量模式：不要求根目录有 SKILL.md
+            has_skill_md = True
+        elif target_path.is_dir():
             skill_md = target_path / 'SKILL.md'
             has_skill_md = skill_md.exists() and skill_md.is_file()
         elif target_path.is_file():
@@ -204,15 +221,29 @@ class PreFlightCheck:
             'findings': findings,
             'critical': critical_count,
             'high': high_count,
-            'message': self._summary(passed, critical_count, high_count, findings),
+            'is_batch_mode': is_batch_mode,
+            'sub_skills': [str(s) for s in sub_skills] if is_batch_mode else [],
+            'message': self._summary(passed, critical_count, high_count, findings, is_batch_mode),
         }
 
     def _check_autostart(self, target_path: Path) -> List[Dict]:
-        """检查自启动机制（批处理、shell RC、cron 等）"""
+        """检查自启动机制（批处理、shell RC、cron 等）
+        
+        v5.5.1 修复：只检查可执行代码文件（.py/.sh/.js/.ts），
+        排除 Markdown/文本/配置文件中的关键词误报。
+        """
         findings = []
 
         if not target_path.is_dir():
             return findings
+
+        # 只检查代码文件，跳过文档和配置
+        CODE_EXTS = {'.py', '.sh', '.bash', '.js', '.ts', '.jsx', '.tsx',
+                     '.bat', '.cmd', '.ps1', '.rb', '.pl'}
+        SKIP_EXTS = {'.md', '.txt', '.rst', '.log', '.json', '.yaml', '.yml',
+                     '.toml', '.xml', '.html', '.css', '.csv', '.sql',
+                     '.lock', '.png', '.jpg', '.gif', '.svg', '.ico',
+                     '.woff', '.ttf', '.eot', '.wasm'}
 
         autostart_patterns = {
             r'^start\s+.*\.(exe|dll|bat|cmd)': 'Windows 自动启动命令',
@@ -224,6 +255,16 @@ class PreFlightCheck:
 
         for f in target_path.rglob('*'):
             if not f.is_file():
+                continue
+
+            suffix = f.suffix.lower()
+            
+            # 跳过文档和配置文件
+            if suffix in SKIP_EXTS:
+                continue
+            
+            # 只检查代码文件或无扩展名文件
+            if suffix not in CODE_EXTS and suffix != '':
                 continue
             
             # 只检查小文本文件（避免读大二进制文件）
@@ -256,7 +297,7 @@ class PreFlightCheck:
 
         return findings
 
-    def _summary(self, passed: bool, critical: int, high: int, findings: List[Dict]) -> str:
+    def _summary(self, passed: bool, critical: int, high: int, findings: List[Dict], is_batch_mode: bool = False) -> str:
         if passed:
             return '✅ 前置合法性检查通过 — 目标看起来是一个合法的 OpenClaw skill'
         
