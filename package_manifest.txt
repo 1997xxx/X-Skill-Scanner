@@ -1,0 +1,20 @@
+# X-Skill-Scanner Package Manifest
+# Files to include/exclude when creating .skill distribution package
+
+# Include (core files)
+INCLUDE: SKILL.md
+INCLUDE: lib/**/*
+INCLUDE: rules/**/*
+INCLUDE: data/**/*
+INCLUDE: references/**/*
+
+# Exclude (development/documentation files)
+EXCLUDE: README.md
+EXCLUDE: README_CH.md
+EXCLUDE: CHANGELOG.md
+EXCLUDE: CONTRIBUTING.md
+EXCLUDE: SECURITY.md
+EXCLUDE: package_manifest.txt
+EXCLUDE: .github/**/*
+EXCLUDE: tests/**/*
+EXCLUDE: .*  # All hidden files/dirs
