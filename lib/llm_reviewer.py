@@ -151,6 +151,11 @@ class LLMReviewer:
     def __init__(self, model: Optional[str] = None):
         self.model = model or os.environ.get('SCANNER_REVIEW_MODEL', None)
         self._client = None
+        # v5.6: Circuit breaker state
+        self.consecutive_failures = 0
+        self.total_calls = 0
+        self.successful_calls = 0
+        self.circuit_open = False
 
     def _get_provider_config(self) -> Dict[str, str]:
         """获取 LLM Provider 配置（使用共享 llm_provider 模块）
@@ -256,6 +261,54 @@ class LLMReviewer:
                     return text
             return ''
 
+    @staticmethod
+    def _is_negative_example(file_path, line_number: int) -> bool:
+        """
+        v5.6: Detect if a flagged line is a negative example 
+        (telling users what NOT to do, vs actually malicious instruction)
+        """
+        import re
+        try:
+            from pathlib import Path
+            fp = file_path if isinstance(file_path, Path) else Path(file_path)
+            lines = fp.read_text(encoding='utf-8', errors='ignore').split('\n')
+            # Get context window (5 lines before and after)
+            start = max(0, line_number - 6)
+            end = min(len(lines), line_number + 5)
+            context = '\n'.join(lines[start:end]).lower()
+            
+            # Negative markers — phrases that indicate "don't do this"
+            # Note: Chinese keywords don't need \s+ after them
+            negative_patterns = [
+                r'(?i)never\s+(do|run|execute|install|enable)',
+                r'(?i)do\s+not\s+(disable|turn\s*off|remove|bypass|skip)',
+                r'(?i)avoid\s+(disabling|turning\s*off|removing)',
+                r'(?i)(should|must|will)\s+not\s+(disable|turn\s*off)',
+                r'(?i)warning[:\s].*(?:not|never|avoid|don\'t)',
+                r'(?i)注意[：:]?.*不?要',
+                r'禁止',  # Chinese: prohibit/forbid (no \s+ needed)
+                r'切勿',  # Chinese: must not
+                r'不要',  # Chinese: do not
+                r'请勿',  # Chinese: please do not
+                r'不要禁用',
+                r'不要关闭',
+                r'不要绕过',
+                r'反例',
+                r'反面示例',
+                r'错误示例',
+                r'(?i)bad\s+(example|practice)',
+                r'(?i)anti[- ]pattern',
+                r'(?i)(?:^|\s)-(?:\s+)?(?:不要|禁止|勿|避免)',
+            ]
+            
+            for pattern in negative_patterns:
+                if re.search(pattern, context):
+                    return True
+            
+            return False
+        except Exception:
+            return False
+
     def _call_llm(self, user_prompt: str) -> Dict:
         """调用 LLM 进行单条审查"""
         provider = self._get_provider_config()
@@ -272,17 +325,55 @@ class LLMReviewer:
             method='POST',
         )
         
-        try:
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                content = resp.read().decode('utf-8')
-                result = json.loads(content)
+        # v5.6: Circuit breaker check
+        if self.circuit_open:
+            raise RuntimeError("Circuit breaker open — too many consecutive failures")
+        
+        # v5.6: Retry with exponential backoff for transient errors
+        import time
+        max_retries = 3
+        last_error = None
+        
+        for attempt in range(max_retries):
+            try:
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    content = resp.read().decode('utf-8')
+                    result = json.loads(content)
+                    
+                    text = self._extract_response_text(result, api_type)
+                    if not text:
+                        raise ValueError(f"Empty response from LLM (type={api_type}). Response keys: {list(result.keys())[:10]}")
+                    # Success — reset consecutive failures
+                    self.consecutive_failures = 0
+                    self.total_calls += 1
+                    self.successful_calls += 1
+                    return self._parse_llm_response(text)
+            except urllib.error.HTTPError as e:
+                last_error = e
+                if e.code == 500 and attempt < max_retries - 1:
+                    wait_time = 2 ** attempt  # 2s, 4s
+                    print(f"   ⚠️  LLM 500 error, retrying in {wait_time}s... (attempt {attempt+1}/{max_retries})")
+                    time.sleep(wait_time)
+                    continue
+                # Track failure
+                self.consecutive_failures += 1
+                self.total_calls += 1
                 
-                text = self._extract_response_text(result, api_type)
-                if not text:
-                    raise ValueError(f"Empty response from LLM (type={api_type}). Response keys: {list(result.keys())[:10]}")
-                return self._parse_llm_response(text)
-        except Exception as e:
-            raise RuntimeError(f"LLM API 调用失败: {e}")
+                # Open circuit breaker after 5 consecutive failures
+                if self.consecutive_failures >= 5:
+                    self.circuit_open = True
+                    print(f"   ⛔ Circuit breaker opened after {self.consecutive_failures} consecutive failures")
+                break
+            except Exception as e:
+                last_error = e
+                self.consecutive_failures += 1
+                self.total_calls += 1
+                if self.consecutive_failures >= 5:
+                    self.circuit_open = True
+                    print(f"   ⛔ Circuit breaker opened after {self.consecutive_failures} consecutive failures")
+                break
+        
+        raise RuntimeError(f"LLM API 调用失败（已重试{max_retries}次）: {last_error}")
 
     def _build_file_tree(self, target: Path) -> str:
         """构建技能目录的文件树"""
@@ -410,6 +501,51 @@ class LLMReviewer:
             
         except Exception:
             return "(error extracting related code)"
+
+    @staticmethod
+    def _heuristic_fallback(finding: Dict, target) -> ReviewResult:
+        """
+        v5.6: Rule-based heuristic classification when LLM is unavailable.
+        More conservative than LLM but better than blindly accepting all findings.
+        """
+        import re
+        title = finding.get('title', '').lower()
+        desc = finding.get('description', '').lower()
+        
+        # Patterns that strongly suggest false positive
+        fp_indicators = [
+            (r'规则定义|detection\s+rule|pattern\s+definition', '安全工具自身的规则定义'),
+            (r'参考数据|reference\s+data|known.*malicious', '参考数据文件'),
+            (r'审计|audit|检查|check|验证|verify', '安全审计脚本'),
+            (r'文档|document|readme|说明|描述', '文档中的关键词'),
+            (r'安装器|installer|setup|postinstall', '安全的安装钩子'),
+            (r'echo|print|log|输出', 'Echo/print 语句'),
+            (r'dir\s+权限|permission|chmod|ls\s+-la', '目录安全检查'),
+            (r'负面示例|反面教材|bad\s+example|anti.pattern', '负面示例/反例'),
+            (r'不要|禁止|切勿|never\s+do|do\s+not', '警告/禁止性说明（非恶意指令）'),
+        ]
+        
+        text_to_check = f"{title} {desc}"
+        for pattern, reason in fp_indicators:
+            if re.search(pattern, text_to_check, re.IGNORECASE):
+                return ReviewResult(
+                    original_finding=finding,
+                    verdict='FP',
+                    confidence=0.6,
+                    reasoning=f'启发式分类（LLM不可用）: {reason}',
+                    true_severity='INFO',
+                    summary=f'可能是误报: {reason}'
+                )
+        
+        # If no FP indicators found, mark as HUMAN_REVIEW (conservative)
+        return ReviewResult(
+            original_finding=finding,
+            verdict='HUMAN_REVIEW',
+            confidence=0.5,
+            reasoning='启发式无法确定，LLM 不可用，建议人工审查',
+            true_severity=None,
+            summary='需要人工审查（LLM 不可用时保守处理）'
+        )
 
     def review_findings_batch(self, findings: List[Dict], target_path: str,
                                threshold: str = "MEDIUM") -> List[ReviewResult]:
