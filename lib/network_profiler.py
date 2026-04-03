@@ -98,6 +98,90 @@ NETWORK_PATTERNS = [
     (r'https?://(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', 'ip_url'),
 ]
 
+# ─── v5.5.1: 可信域名白名单（企业内部 API）─────────────────
+# 这些域名的网络请求不应被标记为数据外传或可疑行为
+TRUSTED_DOMAINS = {
+    # 阿里巴巴/蚂蚁集团内部
+    'alibaba-inc.com', 'alibaba.com', 'antgroup.com', 'antfin.com',
+    'ant-global.com', 'antglobal-inc.com', 'mybank.cn',
+    # 钉钉
+    'oapi.dingtalk.com', 'api.dingtalk.com', 'dingtalk.com',
+    'dingtalkapps.com', 'larksuite.com', 'feishu.cn',
+    # FBI/ODPS 数据分析平台
+    'fbi.alibaba-inc.com', 'odps.alibaba-inc.com',
+    # 常见云服务提供商
+    'aliyuncs.com', 'alicloudapi.com', 'aliyun.com',
+    'amazonaws.com', 'azure.com', 'googleapis.com',
+    # OpenClaw/OpenAI 生态
+    'openai.com', 'openclaw.ai', 'anthropic.com',
+}
+
+
+def _is_trusted_domain(url_or_domain: str) -> bool:
+    """检查 URL 或域名是否在可信白名单中"""
+    url_lower = url_or_domain.lower()
+    for domain in TRUSTED_DOMAINS:
+        if domain in url_lower:
+            return True
+    return False
+
+
+# ─── v5.5.1: 可信域名白名单（企业内部 API）─────────────────
+# 这些域名的网络请求不应被标记为数据外传或可疑行为
+TRUSTED_DOMAINS = {
+    # 阿里巴巴/蚂蚁集团内部
+    'alibaba-inc.com', 'alibaba.com', 'antgroup.com', 'antfin.com',
+    'ant-global.com', 'antglobal-inc.com', 'mybank.cn',
+    # 钉钉
+    'oapi.dingtalk.com', 'api.dingtalk.com', 'dingtalk.com',
+    'dingtalkapps.com', 'larksuite.com', 'feishu.cn',
+    # FBI/ODPS 数据分析平台
+    'fbi.alibaba-inc.com', 'odps.alibaba-inc.com',
+    # 常见云服务提供商
+    'aliyuncs.com', 'alicloudapi.com', 'aliyun.com',
+    'amazonaws.com', 'azure.com', 'googleapis.com',
+    # OpenClaw/OpenAI 生态
+    'openai.com', 'openclaw.ai', 'anthropic.com',
+}
+
+
+def _is_trusted_domain(url_or_domain: str) -> bool:
+    """检查 URL 或域名是否在可信白名单中"""
+    url_lower = url_or_domain.lower()
+    for domain in TRUSTED_DOMAINS:
+        if domain in url_lower:
+            return True
+    return False
+
+
+# ─── v5.5.1: 可信域名白名单（企业内部 API）─────────────────
+# 这些域名的网络请求不应被标记为数据外传或可疑行为
+TRUSTED_DOMAINS = {
+    # 阿里巴巴/蚂蚁集团内部
+    'alibaba-inc.com', 'alibaba.com', 'antgroup.com', 'antfin.com',
+    'ant-global.com', 'antglobal-inc.com', 'mybank.cn',
+    # 钉钉
+    'oapi.dingtalk.com', 'api.dingtalk.com', 'dingtalk.com',
+    'dingtalkapps.com', 'larksuite.com', 'feishu.cn',
+    # FBI/ODPS 数据分析平台
+    'fbi.alibaba-inc.com', 'odps.alibaba-inc.com',
+    # 常见云服务提供商
+    'aliyuncs.com', 'alicloudapi.com', 'aliyun.com',
+    'amazonaws.com', 'azure.com', 'googleapis.com',
+    # OpenClaw/OpenAI 生态
+    'openai.com', 'openclaw.ai', 'anthropic.com',
+}
+
+
+def _is_trusted_domain(url_or_domain: str) -> bool:
+    """检查 URL 或域名是否在可信白名单中"""
+    url_lower = url_or_domain.lower()
+    for domain in TRUSTED_DOMAINS:
+        if domain in url_lower:
+            return True
+    return False
+
+
 # ─── 数据外传模式 ──────────────────────────────────────────────
 EXFILTRATION_PATTERNS = [
     (r'requests\.post.*(?:data|json)\s*=', 'HTTP POST with data payload'),
@@ -305,11 +389,17 @@ class NetworkProfiler:
         return findings
 
     def _detect_exfiltration(self, content: str, file_path: Path) -> List[NetworkFinding]:
-        """检测数据外传模式"""
+        """检测数据外传模式
+        
+        v5.5.1 修复：跳过可信域名的请求，避免企业内部 API 误报。
+        """
         findings = []
         lines = content.split('\n')
         
         for line_num, line in enumerate(lines, 1):
+            # ✅ 跳过可信域名的行
+            if _is_trusted_domain(line):
+                continue
             for pattern, desc in EXFILTRATION_PATTERNS:
                 if re.search(pattern, line, re.IGNORECASE):
                     findings.append(NetworkFinding(
