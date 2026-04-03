@@ -50,8 +50,8 @@ class ReportGenerator:
             d = isinstance(first, dict)
             locs = []
             for g in grp:
-                ln = g.get("line_number") or g.get("line", 0)
-                ln = f.get("line_number") or f.get("line", 0)
+                fp = g.get('file_path') or g.get('path', '?')
+                ln = g.get('line_number') or g.get('line', 0)
                 locs.append(f'{fp}:{ln}' if ln else fp)
             ulocs = list(dict.fromkeys(locs))
             cnt = len(ulocs)
