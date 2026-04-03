@@ -97,3 +97,9 @@ td{padding:8px 10px;border-bottom:1px solid #eee;vertical-align:top;
 @media(max-width:768px){.ctn{padding:16px}table{font-size:12px}th,td{padding:8px 6px}
     .cl{display:none}.sts{grid-template-columns:repeat(2,1fr)}}
 """
+
+# ─── HTML Report Templates ────────────────────────────────────────
+# Common HTML snippets for report generation (avoid long inline strings)
+HTML_SUMROW = '<div class="sumrow"><span class="sumlbl">{label}</span><span>{value}</span></div>'
+HTML_FINDING_ROW = '<tr class="{cls}"><td>{label}</td><td style="color:{color};font-weight:700">{val}</td></tr>'
+HTML_CODE_BLOCK = '<pre style="background:#1a1a2e;color:#e9456e;padding:10px;border-radius:4px;overflow-x:auto"><code>{code}</code></pre>'
