@@ -90,8 +90,8 @@ dangerous_functions:
     id: DANGER_001
     name: Python eval/exec
     patterns:
-    - \beval\s*\(
-    - \bexec\s*\(
+    - (?<![a-zA-Z0-9_])eval\s*\(
+    - (?<![a-zA-Z0-9_])exec\s*\(
     remediation: 避免使用 eval/exec，使用安全替代方案
     severity: HIGH
   - cwe: CWE-78
@@ -339,7 +339,7 @@ skill_injection:
     id: SKILLJECT_001
     name: Auxiliary Script Execution / 辅助脚本执行
     patterns:
-    - (?:chmod\s+\+x|\.\/.*\.(?:sh|py)|subprocess\.(?:call|run|Popen)|os\.system|exec\()
+    - (?:chmod\s+\+x|\.\/.*\.(?:sh|py)|subprocess\.(?:call|run|Popen)|os\.system|(?<![a-zA-Z0-9_])exec\()
     remediation: 审查所有辅助脚本执行，确认无恶意行为 / Review all auxiliary script execution
     severity: CRITICAL
   - cwe: CWE-94
@@ -401,7 +401,7 @@ time_bomb:
     name: Sleep/Delay Obfuscation / 睡眠延迟混淆
     patterns:
     - time\.sleep\s*\(\s*[1-9]\d{2,}\s*\)
-    - setTimeout\(.*\d{5,}
+    - (?<!req\.)setTimeout\(.*\d{5,}(?!.*(?:timeout|Timeout))
     - sleep\s+[1-9]\d{2,}
     remediation: 异常长的延迟可能用于逃避沙箱检测 / Unusual delays may evade sandbox detection
     severity: MEDIUM

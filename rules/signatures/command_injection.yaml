@@ -6,8 +6,8 @@
   severity: CRITICAL
   description: "动态代码执行 (eval/exec)"
   patterns:
-    - "\\beval\\s*\\("
-    - "\\bexec\\s*\\("
+    - "(?<![a-zA-Z0-9_])eval\\s*\\("
+    - "(?<![a-zA-Z0-9_])exec\\s*\\("
     - "Function\\s*\\("
     - "new\\s+Function\\s*\\("
   exclude_patterns:
