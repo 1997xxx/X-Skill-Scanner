@@ -406,31 +406,39 @@ python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py --url <skill-url>
 
 ## 风险等级 / Risk Levels
 
-| 等级 / Level | 分数 / Score | 处理 / Action |
-|-------------|-------------|--------------|
-| 🟢 LOW | 0–19 | ✅ 可安全安装 / Safe to install |
-| 🟡 MEDIUM | 20–49 | ⚠️ 安装前审查发现项 / Review findings before installing |
-| 🔴 HIGH | 50–79 | ❌ 未经批准禁止安装 / Do not install without approval |
-| ⛔ EXTREME | 80–100 | ❌ 立即阻止 / Block immediately |
+| 等级 | 分数范围 | 建议行动 |
+|------|---------|----------|
+| 🟢 LOW | 0–25 | ✅ 可安全安装 |
+| 🟡 MEDIUM | 26–50 | ⚠️ 安装前审查 |
+| 🟠 HIGH | 51–75 | ❌ 不建议安装 |
+| 🔴 EXTREME | 76–100 | 🚨 立即阻止 |
+
+> 📖 详见 [`references/architecture/risk-levels.md`](references/architecture/risk-levels.md)
 
 ---
 
 ## 十二层防御管线 / Twelve-Layer Defense Pipeline
 
-| 层级 / Layer | 引擎 / Engine | 检测能力 / Capability |
-|-------------|--------------|----------------------|
-| 1 | 🔍 威胁情报 / Threat Intel | 380+ 恶意技能名 · IOC 域名/IP · 攻击模式匹配 |
-| 2 | 🧹 去混淆引擎 / Deobfuscation | Base64/ROT13/Hex · BiDi 覆盖 · 零宽字符 · TR39 · Zlib · 字符串拼接 |
-| 3 | 🔎 静态分析 / Static Analysis | 194+ 规则 · 凭证泄露 · 注入 · 供应链 · 时间炸弹 |
-| 4 | 🌳 AST 深度分析 / AST Deep Analysis | 间接执行 · 数据流追踪 · 动态导入 · 反序列化 |
-| 5 | 📦 依赖检查 / Dependency Check | requirements.txt / package.json CVE 匹配（20+ 高危包） |
-| 6 | 💉 提示词注入探针 / Prompt Injection | 25+ 探针 · 系统覆盖 · 角色劫持 · DAN/Jailbreak |
-| 7 | 📋 基线追踪 / Baseline Tracking | SHA-256 指纹 · Rug-Pull 检测 · 变更审计 |
-| 8 | 🧠 语义审计 / Semantic Audit | LLM 意图分析（可选，高风险文件触发） |
-| 9 | 📊 熵值分析 / Entropy Analysis | Shannon 熵 · CJK 自适应阈值 · 编码 payload 检测 |
-| 10 | 🔧 安装钩子检测 / Install Hooks | setup.py/cmdclass · postinstall · Shell RC 修改 · Cron 注入 |
-| 11 | 🌐 网络行为画像 / Network Profiler | 端点提取 · IP 直连 · 隐蔽信道 · C2 特征 |
-| 12 | 🔐 凭证窃取检测 / Credential Theft | osascript 伪造弹窗 · SSH/AWS 密钥读取 · 浏览器 Cookie 窃取 · Keychain 访问 |
+扫描器采用 12 层独立检测引擎 + 跨层关联分析：
+
+| 层 | 引擎 | 能力 |
+|---|---|---|
+| 0 | 🎯 技能画像 | 信任评分 · 扫描策略 |
+| 1 | 🔍 威胁情报 | 380+ 恶意技能名 · IOC 域名/IP |
+| 2 | 🧹 去混淆 | Base64/Hex/BiDi/零宽/TR39/Zlib |
+| 3 | 🔎 静态分析 | 194+ 规则 |
+| 4 | 🌳 AST 分析 | 污点追踪 · 间接执行 |
+| 5 | 📦 依赖检查 | CVE 匹配 |
+| 6 | 💉 提示词注入 | 25+ 探针 |
+| 7 | 📋 基线追踪 | SHA-256 Rug-Pull 检测 |
+| 8 | 🧠 语义审计 | 多 Agent 意图分析 |
+| 9 | 📊 熵值分析 | Shannon 熵 · CJK 阈值 |
+| 10 | 🔧 安装钩子 | postinstall · Cron 注入 |
+| 11 | 🌐 网络画像 | 端点提取 · C2 检测 |
+| 12 | 🔐 凭证窃取 | SSH/AWS/Keychain |
+| 🔗 | 跨层关联 | 6 种攻击链模式 |
+
+> 📖 详见 [`references/architecture/defense-layers.md`](references/architecture/defense-layers.md)
 
 ---
 
