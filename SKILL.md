@@ -471,8 +471,6 @@ After running a scan, present results in this order:
 
 使用面向用户的风险标签（LOW/MEDIUM/HIGH/EXTREME），除非用户要求，否则不展示内部评分细节。
 
-Use the user-facing risk labels (LOW/MEDIUM/HIGH/EXTREME), not internal score details, unless the user asks for them.
-
 ---
 
 ## 📚 详细文档参考 / Documentation
