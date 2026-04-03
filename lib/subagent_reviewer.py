@@ -82,60 +82,55 @@ class HeuristicReviewer:
     
     @staticmethod
     def review(finding: Dict, target: Path) -> ReviewResult:
-        """基于规则的启发式审查"""
+        """基于规则的启发式审查 — v6.1 修复激进 FP 分类 (LinkedIn 恶意技能教训)"""
         title = finding.get('title', '').lower()
         desc = finding.get('description', '').lower()
+        severity = finding.get('severity', 'INFO')
         
-        fp_indicators = [
-            (r'规则定义|detection\s+rule|pattern\s+definition', '安全工具自身的规则定义'),
-            (r'参考数据|reference\s+data|known.*malicious', '参考数据文件'),
-            (r'审计|audit|检查|check|验证|verify', '安全审计脚本'),
-            (r'文档|document|readme|说明|描述', '文档中的关键词'),
-            (r'安装器|installer|setup|postinstall', '安全的安装钩子'),
-            (r'echo|print|log|输出', 'Echo/print 语句'),
-            (r'dir\s+权限|permission|chmod|ls\s+-la', '目录安全检查'),
-            (r'负面示例|反面教材|bad\s+example|anti.pattern', '负面示例/反例'),
-            (r'不要|禁止|切勿|never\s+do|do\s+not', '警告/禁止性说明'),
-        ]
-        
-        text_to_check = f"{title} {desc}"
-        for pattern, reason in fp_indicators:
-            if re.search(pattern, text_to_check, re.IGNORECASE):
+        # CRITICAL/HIGH 必须人工审查，禁止自动 FP 分类
+        if severity in ('CRITICAL', 'HIGH'):
+            # 例外：安全工具自引用的规则定义
+            file_path = str(finding.get('file_path', ''))
+            if 'scanner' in file_path.lower() and ('规则定义' in title or 'rule definition' in title.lower()):
+                pass  # Continue to FP check
+            else:
                 return ReviewResult(
                     original_finding=finding,
-                    verdict='FP',
-                    confidence=0.6,
-                    reasoning=f'启发式分类: {reason}',
-                    true_severity='INFO',
-                    summary=f'可能是误报: {reason}'
+                    verdict='HUMAN_REVIEW',
+                    confidence=0.95,
+                    reasoning=f'{severity} 级发现必须人工审查 (LinkedIn 技能教训)',
+                    true_severity=severity,
+                    summary=f'{severity} 风险 - 需要人工审查'
                 )
         
-        # Check negative example context
-        file_path = finding.get('file', '')
-        line_num = finding.get('line_number', 0)
-        if file_path and line_num > 0:
-            fp = Path(file_path) if not isinstance(file_path, Path) else file_path
-            if fp.exists() and HeuristicReviewer._is_negative_example(fp, line_num):
+        # FP 指标 (极度严格 - 只放过真正的误报)
+        fp_indicators = [
+            (r'规则定义\|detection\\s+rule\|扫描器自身', '安全工具规则定义'),
+            (r'IOC\|参考数据\|threat.*intel', '威胁情报数据文件'),
+            (r'测试\|test.*case\|单元测试', '测试代码'),
+        ]
+        
+        text = f"{title} {desc}"
+        for pattern, reason in fp_indicators:
+            if re.search(pattern, text, re.IGNORECASE):
                 return ReviewResult(
                     original_finding=finding,
                     verdict='FP',
                     confidence=0.7,
-                    reasoning='上下文包含否定词/警告标记，可能是负面示例',
+                    reasoning=f'确定误报：{reason}',
                     true_severity='INFO',
-                    summary='负面示例/反例说明'
+                    summary=f'误报：{reason}'
                 )
         
+        # 默认：所有其他发现都需要人工审查
         return ReviewResult(
             original_finding=finding,
             verdict='HUMAN_REVIEW',
             confidence=0.5,
-            reasoning='启发式无法确定，建议人工审查',
+            reasoning='启发式无法确定',
             true_severity=None,
             summary='需要人工审查'
         )
-
-
-# ─── SubAgent-Based Review ─────────────────────────────────────
 
 class SubAgentReviewer:
     """
