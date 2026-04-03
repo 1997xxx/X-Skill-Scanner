@@ -50,8 +50,8 @@ class ReportGenerator:
             d = isinstance(first, dict)
             locs = []
             for g in grp:
-                fp = g.get('file_path','') if d else getattr(g,'file_path','')
-                ln = g.get('line_number') or g.get('line',0) if d else getattr(g,'line_number',None) or getattr(g,'line',0)
+                ln = g.get("line_number") or g.get("line", 0)
+                ln = f.get("line_number") or f.get("line", 0)
                 locs.append(f'{fp}:{ln}' if ln else fp)
             ulocs = list(dict.fromkeys(locs))
             cnt = len(ulocs)
@@ -221,7 +221,7 @@ class ReportGenerator:
                 sev = f.get('severity', '?') if d else getattr(f, 'severity', '?')
                 ttl = f.get('title', '?') if d else getattr(f, 'title', '?')
                 fp = f.get('file_path', '') if d else getattr(f, 'file_path', '')
-                ln = f.get('line_number') or f.get('line', 0) if d else getattr(f, 'line_number', None) or getattr(f, 'line', 0)
+                ln = f.get("line_number") or f.get("line", 0)
                 desc = f.get('description', '') if d else getattr(f, 'description', '')
                 rem = f.get('remediation', '') if d else getattr(f, 'remediation', '')
                 src = f.get('source', '') if d else getattr(f, 'source', '')
@@ -283,7 +283,8 @@ class ReportGenerator:
         lines.append('-' * 40)
         lines.append(f"{'风险等级':<15} {emoji} {rl}")
         lines.append(f"{'风险分数':<15} {rs}/100")
-        lines.append(f"{'安全问题':<15} {total_findings} 个（{crit_count} CRITICAL + {high_count} HIGH + {med_count} MEDIUM + {low_count} LOW）")
+        lines.append("安全问题：{} 个 ({} CRITICAL + {} HIGH)".format(
+            total_findings, crit_count, high_count))
         lines.append(f"{'结论':<15} {vt}")
         lines.append('')
         lines.append('=' * 70)
