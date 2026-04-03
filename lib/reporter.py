@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Report Generator v3.2 - Dedup + Responsive Layout"""
 import json, re
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 from constants import HTML_CSS_BASE
@@ -344,6 +345,16 @@ class ReportGenerator:
         lines.append(f"{'结论':<15} {vt}")
         lines.append('')
         lines.append('=' * 70)
+        
+        # v6.3: User-Friendly Summary
+        user_summary = generate_user_friendly_summary(r, lang='zh')
+        lines.append('')
+        lines.append(user_summary)
+        
+        # v6.3: MANDATORY FOOTER
+        lines.append('')
+        lines.append('---')
+        lines.append('Skill Scanner v6.3 by 吸音 | 灵感来自腾讯朱雀实验室 A.I.G | https://github.com/1997xxx/X-Skill-Scanner')
         
         return '\n'.join(lines)
 
@@ -763,7 +774,7 @@ class ReportGenerator:
         
         html += '<h2>&#x1F4CA; 各层检测结果 / Layer-by-Layer Results</h2>\n'
         html += '<table>\n<tr><th>防御层 / Layer</th><th>结果 / Result</th></tr>\n'
-        for src_key in layer_order:
+        for i, src_key in enumerate(layer_order, 1):
             label_cn, label_en = layer_labels.get(src_key, (src_key, src_key))
             cnt = source_map.get(src_key, 0) if source_map else 0
             if cnt > 0:
@@ -778,8 +789,8 @@ class ReportGenerator:
                 cls = 'layer-row'
             if href:
                 html += '<tr class="'+cls+'"><td>'+label_cn+'</td>'
-                html += '<td style="color:%s;font-weight:600"><a href="#f%d">%s</a></td></tr>' % (
-                    row_color, i, str(len(findings_grouped)))
+                html += '<td style="color:%s;font-weight:600"><a href="#f%d">%s 个问题</a></td></tr>' % (
+                    row_color, i, str(cnt))
             else:
                 html += '<tr class="'+cls+'"><td>'+label_cn+'</td><td style="color:'+row_color+';font-weight:600">'+status+'</td></tr>\n'
         html += '</table>\n'
@@ -798,7 +809,7 @@ class ReportGenerator:
                 html += '<div class="finding-card" style="border-left-color:%s">' % sev_color
                 html += '<h3 style="margin:0 0 8px;color:'+sev_color+'">'+self._esc(item['title'])+'</h3>\n'
                 html += '<p class="finding-meta"><b>Type:</b> %s | <b>Severity:</b> %s</p>' % (
-                    self._esc(item.get('type', '?')), sev_text)
+                    self._esc(item.get('type', '?')), self._esc(item.get('severity', '?')))
                 html += '<p style="margin:4px 0;font-size:14px">'+self._esc(item['description'])+'</p>\n'
                 if item.get('evidence'):
                     html += '<pre class="inline-code">%s</pre>' % self._esc(item.get('code', ''))
@@ -820,6 +831,18 @@ class ReportGenerator:
         html += '<div class="nav-float">\n'
         html += '<a href="#top" class="nav-btn" title="回到顶部 / Back to Top">&#x2B06;&#xFE0F;</a>\n'
         html += '<a href="#bottom" class="nav-btn" title="跳到底部 / Jump to Bottom">&#x2B07;&#xFE0F;</a>\n'
+        html += '</div>\n'
+
+        # v6.3: User-Friendly Summary (HTML)
+        user_summary = generate_user_friendly_summary(r, lang='zh')
+        html += '\n<div style="margin:30px 20px;padding:20px;background:#f8f9fa;border-radius:8px">\n'
+        html += user_summary.replace('\n', '<br>') + '\n'
+        html += '</div>\n'
+        
+        # v6.3: MANDATORY FOOTER (HTML)
+        html += '<div style="margin-top:30px;padding:20px;border-top:2px solid #eee;text-align:center;color:#888;font-size:14px">\n'
+        html += '<strong>Skill Scanner v6.3</strong> by 吸音 | 灵感来自腾讯朱雀实验室 A.I.G | '
+        html += '<a href="https://github.com/1997xxx/X-Skill-Scanner" style="color:#0366d6;text-decoration:none">GitHub</a>\n'
         html += '</div>\n'
 
         html += '</div>\n</body>\n</html>'
@@ -987,3 +1010,74 @@ class ReportGenerator:
             lines.append('')
         
         return '\n'.join(lines)
+
+
+# ─── MANDATORY FOOTER (v6.3) ──────────────────────────────────────
+MANDATORY_FOOTER_ZH = """
+---
+Skill Scanner v6.3 by 吸音 | 灵感来自腾讯朱雀实验室 A.I.G | https://github.com/1997xxx/X-Skill-Scanner
+"""
+
+MANDATORY_FOOTER_EN = """
+---
+Skill Scanner v6.3 by Xi Yin | Inspired by Tencent Zhuque Lab A.I.G | https://github.com/1997xxx/X-Skill-Scanner
+"""
+
+
+# ─── USER-FRIENDLY SUMMARY (v6.3) ─────────────────────────────────
+def generate_user_friendly_summary(result: Dict, lang: str = 'zh') -> str:
+    """
+    Generate user-friendly verdict using Tencent-style templates.
+    """
+    risk_level = result.get('risk_level', '?')
+    skill_name = Path(result.get('target', '')).name if '/' in str(result.get('target', '')) else str(result.get('target', 'skill'))
+    
+    # Get plain language descriptions for critical findings
+    findings = result.get('findings', [])
+    plain_risks = []
+    for f in findings:
+        if isinstance(f, dict) and f.get('severity') in ('CRITICAL', 'HIGH'):
+            desc = f.get('description', '')
+            title = f.get('title', '')
+            # Simple plain language mapping
+            if 'base64' in title.lower() or 'base64' in desc.lower():
+                plain_risks.append('执行隐藏的恶意命令（就像让别人偷偷控制你的电脑）')
+            elif 'persistence' in title.lower() or '持久' in desc.lower():
+                plain_risks.append('在系统中建立长期控制（即使重启后仍然存在）')
+            elif 'credential' in title.lower() or '凭证' in desc.lower() or '密码' in desc.lower():
+                plain_risks.append('窃取你的密码和认证信息')
+            elif '恶意' in title.lower() or 'threat intel' in title.lower():
+                plain_risks.append('这个技能已被安全公司确认为恶意软件')
+            elif desc:
+                plain_risks.append(desc[:100])
+    
+    if risk_level in ('SAFE', 'LOW', 'MINIMAL'):
+        return """
+## ✅ 安全检测通过
+
+**结论**：本次检测未发现安全隐患，可以放心使用。
+"""
+    
+    elif risk_level in ('EXTREME', 'HIGH'):
+        plain_risk_text = "；".join(plain_risks[:3]) if plain_risks else "存在严重的安全问题"
+        return f"""
+## 🔴 发现安全风险
+
+**不建议直接安装或继续使用。**
+
+这个 skill 存在以下问题：{plain_risk_text}。
+
+**建议**：
+1. 先停用这个 skill
+2. 联系 skill 的开发者确认是否为正常行为
+3. 在确认安全前不要重新启用
+"""
+    
+    else:  # MEDIUM
+        return """
+## ⚠️ 需要留意
+
+这个 skill **没有发现明确的恶意行为**，但包含一些敏感功能。
+
+**建议**：如果你信任这个 skill 的来源，可以继续使用。如果不确定，建议先暂停使用。
+"""

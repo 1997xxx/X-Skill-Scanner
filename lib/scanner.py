@@ -83,6 +83,75 @@ from pre_flight_check import PreFlightCheck
 from social_engineering_detector import SocialEngineeringDetector
 
 
+
+# ─── Language Detection (v6.3) ─────────────────────────────────────
+def _detect_output_language(user_message: str = "") -> str:
+    """
+    Detect output language based on user's message.
+    Returns 'zh' or 'en' — do NOT output this detection result to user.
+    
+    DC NOT output meta-text like:
+    - "当前输出语言为中文" ❌
+    - "Detected language: English" ❌
+    
+    Just use the detected language silently.
+    """
+    if not user_message:
+        return 'zh'  # Default to Chinese
+    
+    # Check for Chinese characters
+    if re.search(r'[\u4e00-\u9fff]', user_message):
+        return 'zh'
+    
+    # Check for English words (3+ letters)
+    if re.search(r'[a-zA-Z]{3,}', user_message):
+        return 'en'
+    
+    return 'zh'  # Default
+
+
+# ─── Plain Language Risk Description (v6.3) ────────────────────────
+PLAIN_LANGUAGE_MAP = {
+    # Chinese
+    ('base64', '解码', '执行'): '执行隐藏的恶意命令（就像让别人偷偷控制你的电脑）',
+    ('persistence', 'launchctl', '自启动'): '在系统中建立长期控制（即使重启后仍然存在）',
+    ('credential', '凭证', '密码', '窃取'): '窃取你的密码和认证信息',
+    ('reverse_shell', '反向 shell'): '让攻击者远程控制你的电脑',
+    ('Threat Intel', '已知恶意', '威胁情报'): '这个技能已被安全公司确认为恶意软件',
+    ('exfiltration', '外传', '外发'): '偷偷把你的数据发送给攻击者',
+    (' downloader', '下载器'): '从网上下载恶意程序并执行',
+    ('backdoor', '后门'): '在系统中留下隐蔽入口，供攻击者随时访问',
+    ('trojan', '特洛伊'): '伪装成正常程序，实际上在做恶意的事情',
+    ('hook', 'hook', '劫持'): '劫持其他正常程序的执行流程',
+    
+    # English
+    ('base64', 'decode', 'execute'): 'Execute hidden malicious commands (like letting someone secretly control your computer)',
+    ('persistence', 'launchctl', 'startup'): 'Establish persistent control (survives system reboot)',
+    ('credential', 'password', 'theft'): 'Steal your passwords and authentication tokens',
+    ('reverse_shell', 'backdoor'): 'Allow attackers to remotely control your computer',
+    ('Threat Intel', 'known malicious'): 'This skill has been confirmed as malware by security researchers',
+    ('exfiltration', 'exfil', 'send'): 'Secretly send 你的 data to attackers',
+    ('downloader', 'dropper'): 'Download malicious programs from the internet and execute them',
+    ('backdoor', '后门'): 'Leave a hidden entry point for attackers to access anytime',
+    ('trojan', '特洛伊'): 'Disguise as normal software while doing malicious things',
+    ('hook', 'hooking', 'hijack'): 'Hijack the execution flow of other programs',
+}
+
+
+def get_plain_language_description(finding: Dict) -> str:
+    """Convert technical finding description to plain language"""
+    title = finding.get('title', '').lower()
+    desc = finding.get('description', '').lower()
+    text_to_check = f"{title} {desc}"
+    
+    for keywords, plain_desc in PLAIN_LANGUAGE_MAP.items():
+        if all(kw.lower() in text_to_check for kw in keywords):
+            return plain_desc
+    
+    # Fallback to original description
+    return finding.get('description', '发现潜在安全问题')
+
+
 class SkillScanner:
     """技能安全扫描器 v5.0 — 轻量初筛 + LLM 二次审查"""
 
