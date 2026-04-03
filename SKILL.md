@@ -472,3 +472,31 @@ After running a scan, present results in this order:
 使用面向用户的风险标签（LOW/MEDIUM/HIGH/EXTREME），除非用户要求，否则不展示内部评分细节。
 
 Use the user-facing risk labels (LOW/MEDIUM/HIGH/EXTREME), not internal score details, unless the user asks for them.
+
+---
+
+## 📚 详细文档参考 / Documentation
+
+详细技术文档已拆分到 `references/` 目录，按需加载：
+
+### 安装配置
+- **Flow 0/1/2 详解** — [`references/installation-flows.md`](references/installation-flows.md)
+
+### 工作流
+- **四大标准工作流** — [`references/workflows/canonical-flows.md`](references/workflows/canonical-flows.md)
+
+### 架构说明
+- **十二层防御详解** — [`references/architecture/defense-layers.md`](references/architecture/defense-layers.md)
+- **风险等级定义** — [`references/architecture/risk-levels.md`](references/architecture/risk-levels.md)
+
+### 政策与合规
+- **伦理与合规准则** — [`references/policies/ethics.md`](references/policies/ethics.md)
+
+---
+
+*版本：v6.0.0 | 最后更新：2026-04-03*
+4. **建议 / Recommendation** — 基于风险等级给出明确的安装/阻止建议
+
+使用面向用户的风险标签（LOW/MEDIUM/HIGH/EXTREME），除非用户要求，否则不展示内部评分细节。
+
+Use the user-facing risk labels (LOW/MEDIUM/HIGH/EXTREME), not internal score details, unless the user asks for them.
