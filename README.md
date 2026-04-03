@@ -35,7 +35,7 @@ X Skill Scanner is not a simple regex-matching tool. It builds **12 independent 
 - **Surface Detection** — Threat intelligence matching (380+ known malicious skill names, IOC domains/IPs), whitelist validation
 - **Code Analysis** — 194+ static rules, AST taint tracking, dependency CVE checks, deobfuscation engine
 - **Behavioral Profiling** — Network endpoint extraction, install hook detection, credential theft pattern recognition
-- **Semantic Understanding** — LLM-driven intent analysis, identifying hidden threats invisible to the naked eye
+- **Semantic Understanding** — Multi-agent intent analysis via OpenClaw sessions_spawn, identifying hidden threats invisible to the naked eye
 - **Correlation Analysis** — Cross-engine attack chain detection, discovering multi-stage combined attacks
 
 **Zero configuration required.** The scanner auto-discovers your OpenClaw LLM Provider configuration — no environment variables needed.
@@ -61,19 +61,20 @@ Not every skill needs a full scan. The scanner first performs a **trust profile 
 ```
 Trust Score ≥ 70  → Quick Mode (3 layers)     ~3 seconds
 Trust Score 40-69 → Standard Mode (12 layers)  ~15 seconds
-Trust Score < 40  → Full Mode (12 layers + LLM per-finding review)  ~60 seconds
+Trust Score < 40  → Full Mode (12 layers + SubAgent review)  ~60 seconds
 ```
 
 Profile dimensions: author credibility, skill type, file structure合理性, red flag markers, etc.
 
-### 4️⃣ Batch LLM Review — 70%+ Fewer API Calls
+### 4️⃣ SubAgent-Based Review — Cross-Platform, Zero API Config
 
-Traditional approaches call the LLM separately for each finding, creating massive API overhead. The scanner uses a **file-grouped batch review** strategy:
+The scanner uses OpenClaw's multi-agent communication (`sessions_spawn`) for intelligent false positive filtering:
 
-- All findings in the same file merged into one LLM call
-- Complete code context included for better judgment accuracy
-- Auto-filters false positives (security tool self-references, documentation, test data)
-- Cross-provider alias resolution, auto-adapts to your OpenClaw default model
+- **No external API dependencies** — works on Windows/macOS/Linux without idealab/OpenAI configuration
+- **Push-based notifications** — zero polling cost, real-time results
+- **Automatic heuristic fallback** — when SubAgent unavailable, rule-based classification takes over
+- **Negative example detection** — recognizes "don't do X" documentation patterns vs actual malicious instructions
+- **Batch processing** — groups findings by file for efficient review
 
 ### 5️⃣ Cross-Layer Correlation — Detect Multi-Stage Attack Chains
 
@@ -111,8 +112,8 @@ A single engine's finding may be isolated, but combined signals across multiple 
 | 4 | 🌳 AST Deep Analysis | Taint tracking · indirect execution · dynamic imports |
 | 5 | 📦 Dependency Check | requirements.txt / package.json CVE matching |
 | 6 | 💉 Prompt Injection | 25+ probes · system override · role hijacking · DAN/Jailbreak |
-| 7 | 📋 Baseline Tracking | SHA-256 fingerprint · rug-pull detection |
-| 8 | 🧠 Semantic Audit | LLM intent analysis (optional, for high-risk files) |
+| 7 | 📋 Baseline Tracking | SHA-256 fingerprint · rug-pull detection · change audit |
+| 8 | 🧠 Semantic Audit | Multi-agent intent analysis (optional, for high-risk files) |
 | 9 | 📊 Entropy Analysis | Shannon entropy · CJK adaptive thresholds · encoded payloads |
 | 10 | 🔧 Install Hooks | postinstall · setup.py · shell RC · cron injection |
 | 11 | 🌐 Network Profiler | Endpoint extraction · IP direct connect · covert channels · C2 |
@@ -173,171 +174,156 @@ export OPENAI_MODEL="gpt-4o-mini"
 -t TARGET             Target skill directory or file
 --url URL             Remote skill URL (auto-clones & scans)
 --no-semantic         Skip LLM semantic audit
---no-llm-review       Skip LLM secondary review
+--no-llm-review       Skip SubAgent secondary review
 --no-fp-filter        Skip false positive pre-filter
 --format FORMAT       Output format: text(default)/html/json/md/sarif
 -o OUTPUT             Output file path
 --whitelist FILE      Custom whitelist JSON
---threat-intel FILE   Custom threat intel JSON
---path-filter PATTERN Path exclusion regex
---install             Prompt to install after scan
---no-prompt           Skip install prompt (CI/automation)
---install-to PATH     Specify install directory
+--baseline-only       Check baseline changes only
+--update-baseline     Update baseline after scan
+--profile-only        Output skill profile only
+--json                JSON output shortcut
 ```
 
 ---
 
-## 🔄 Continuous Protection
-
-X Skill Scanner doesn't just scan on demand — it provides **three layers of continuous protection** to ensure every skill in your environment is audited:
-
-### 1. Pre-Install Auto-Scan (AGENTS.md Injection)
-
-When installed as an OpenClaw skill, the scanner automatically injects security rules into `AGENTS.md`. This means **every skill installation triggers a scan before the skill is installed** — no manual action needed.
+## 📊 Sample Output
 
 ```
-User: "Install xxx skill"
-     → Agent auto-scans the skill first
-     → Shows results (SAFE / MEDIUM / EXTREME)
-     → Only installs if risk is acceptable
+🔍 X Skill Scanner v6.0.0
+Scanning: ./my-skill/
+
+🎯 Step 0/7: Skill Profiling...
+Skill: my-skill | Author: trusted-dev | Type: OpenClaw Skill | Files: 12
+Trust Score: 85/100 | Strategy: quick | Red Flags: 0
+
+🔍 Step 1/7: Threat Intelligence...
+✅ No threat intel matches
+
+🔎 Step 3/7: Static Analysis...
+Found 2 issues:
+  ⚠️ [MEDIUM] Hardcoded secret detected (config.py:15)
+  ℹ️ [LOW] Non-standard port usage (network.py:42)
+
+🤖 Step 6.0: SubAgent Review...
+   Review: 2 findings → 1 FP | 0 TP | 1 HUMAN_REVIEW
+
+============================================================
+Risk Level: LOW (8/100)
+Verdict: ✅ SAFE TO INSTALL
+============================================================
 ```
-
-### 2. Session Startup Check
-
-Every new session automatically checks for newly added or changed skills:
-
-```bash
-# Checks all skill directories for changes since last snapshot
-bash ~/.openclaw/skills/clawhub/scripts/check-skills-change.sh
-```
-
-If new or modified skills are found → automatic full scan with report.
-
-### 3. Daily Scheduled Security Scan (Cron Job)
-
-Set up a daily cron job to proactively audit all installed skills:
-
-```bash
-# Recommended: Daily at 9:00 AM (Asia/Shanghai timezone)
-# Scans all skill directories for unauthorized changes
-# Reports any new findings or baseline deviations
-```
-
-**How to set up via OpenClaw:**
-```
-Agent prompt: "Set up a daily skill security scan at 9 AM"
-```
-
-The cron job will:
-- Run `check-skills-change.sh` to detect modifications
-- Full-scan any new or changed skills
-- Report findings (or HEARTBEAT_OK if nothing changed)
-- Create initial baselines for unknown skills
-
----
-
-## 📊 Risk Levels
-
-| Level | Score | Action |
-|-------|-------|--------|
-| 🟢 SAFE | 0–4 | ✅ No significant issues |
-| 🟢 LOW | 5–19 | ✅ Safe to install |
-| 🟡 MEDIUM | 20–49 | ⚠️ Review before installing |
-| 🔴 HIGH | 50–79 | ❌ Do not install without approval |
-| ⛔ EXTREME | 80–100 | ❌ Block immediately |
 
 ---
 
 ## 🏗️ Architecture
 
+### Module Structure
+
 ```
-Skill Input (local dir / GitHub URL / zip)
-    │
-    ▼
-┌─ Pre-flight Legality Check ──────────────────────────────────┐
-│  Validates SKILL.md structure, blocks non-skill inputs       │
-├─ Whitelist Check ────────────────────────────────────────────┤
-│  Known-safe skills skip full scan                            │
-├─ Skill Profiling ────────────────────────────────────────────┤
-│  Trust score → scan_strategy (quick / standard / full)       │
-├─ 12-Layer Detection Pipeline ────────────────────────────────┤
-│                                                              │
-│  Threat Intel → Deobfuscation → Static Analysis → AST       │
-│  Dependencies → Prompt Injection → Baseline → Semantic      │
-│  Entropy → Install Hooks → Network → Credential Theft       │
-│                                                              │
-├─ Cross-Layer Correlation ────────────────────────────────────┤
-│  Detects 6 attack chain patterns across engines              │
-├─ FP Pre-Filter ──────────────────────────────────────────────┤
-│  Auto-filters security tool self-references, docs, tests     │
-├─ LLM Batch Review ───────────────────────────────────────────┤
-│  Groups findings by file → single LLM call per file          │
-├─ Risk Scoring ───────────────────────────────────────────────┤
-│  Cross-layer stacking + correlation bonuses + verdict        │
-└──────────────────────────────────────────────────────────────┘
-    │
-    ▼
-Report: text / HTML (with decoded payloads) / JSON / Markdown / SARIF
+lib/
+├── scanner.py                 # Main orchestrator (12-layer pipeline)
+├── subagent_reviewer.py       # v6.0: Multi-agent review engine
+├── models.py                  # Unified data models (Finding, Severity, etc.)
+├── models_v2.py               # Compatibility shim → models.py
+│
+├── analyzers/                 # Detection engines
+│   ├── pattern_analyzer.py    # Rule-based pattern matching
+│   └── ...
+│
+├── threat_intel.py            # IOC matching (skill names, domains, IPs)
+├── static_analyzer.py         # 194+ static security rules
+├── ast_analyzer.py            # AST-based taint tracking
+├── deobfuscator.py            # Multi-engine deobfuscation
+├── dependency_checker.py      # CVE database matching
+├── prompt_injection_probes.py # 25+ injection test probes
+├── semantic_auditor.py        # LLM-driven intent analysis
+├── entropy_analyzer.py        # Shannon entropy analysis
+├── install_hook_detector.py   # Postinstall/setup.py detection
+├── network_profiler.py        # Network behavior profiling
+├── credential_theft_detector.py # Credential access patterns
+├── social_engineering_detector.py # Social engineering patterns
+├── correlation_engine.py      # Cross-layer attack chain detection
+│
+├── fp_filter.py               # False positive pre-filter
+├── pre_flight_check.py        # Legitimacy validation
+├── skill_profiler.py          # Trust score calculation
+├── risk_scorer.py             # Risk score computation
+├── reporter.py                # Multi-format report generation
+├── baseline.py                # SHA-256 baseline tracking
+├── whitelist.py               # Trusted domain/rule exemptions
+├── rule_loader.py             # YAML rule loading
+├── llm_provider.py            # Shared LLM provider discovery
+├── path_filter.py             # Path exclusion patterns
+├── self_check.py              # Module health check
+└── update_ioc.py              # IOC database updater
 ```
+
+### Design Principles
+
+| Principle | Implementation | Benefit |
+|-----------|---------------|---------|
+| Push > Poll | Auto announcement delivery | Zero polling cost |
+| Isolation > Sharing | Independent sessions, working dirs | No conflicts |
+| Declarative > Imperative | Tool calls, LLM-friendly | Easy orchestration |
+| Async > Sync | Background execution | High concurrency |
+| Snapshot > Reference | Attachment copying | Independent lifecycles |
 
 ---
 
-## 🆕 Changelog Highlights
+## 🔄 Version History
 
-### v6.0.0 (2026-04-02) — Architecture Upgrade
-- 🔌 **Plugin Analyzer Architecture** — `BaseAnalyzer` interface for extensible detection engines (reference: CoPaw)
-- 📝 **YAML Signature Rules** — Per-category YAML files with `exclude_patterns` support, replacing monolithic JSON
-- 🏢 **Enterprise API False Positive Fix** — Trusted domain whitelist (alibaba-inc.com, aliyun.com, etc.) + context-aware downgrade logic
-- 📊 **Structured Data Models** — `dataclass` + Enum (`Severity`, `ThreatCategory`) for type-safe findings
-- 🔁 **Finding Deduplication** — Automatic dedup by rule_id + file_path + line_number
-- 🧠 **Sub-Agent Deep Review** — `--deep-analysis` flag generates structured review tasks for LLM sub-agents
-- 🛡️ **Reference Projects:** CoPaw (Alibaba open-source AI assistant) + ClawSentry (Volcengine AI security)
+See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
-### v5.2.0 (2026-04-02)
-- 🚨 **Decoded Malicious Payloads** — Reports now prominently display fully reconstructed malicious commands at the top
-- 🔓 **Multi-layer Deobfuscation** — Hex array reconstruction, Base64 bytes literal detection, string concat assembly
-- 🎯 **Provider Alias Resolution** — Auto-resolves model names across providers (fixes LLM timeout issues)
-- 🧹 **Fragment Dedup** — Only complete payloads shown; fragments automatically filtered
+### Recent Releases
 
-### v5.1.0 (2026-04-01)
-- Ethics & Compliance Framework (six principles)
-- Project hygiene cleanup + version synchronization
-
-### v5.0.0 (2026-03-31)
-- Profile-driven adaptive scanning (quick/standard/full modes)
-- Batch LLM review (70%+ API call reduction)
-- Cross-layer correlation engine (6 attack chain patterns)
-- Risk scoring upgrade with context-aware modifiers
+| Version | Date | Highlights |
+|---------|------|-----------|
+| **v6.0.0** | 2026-04-03 | SubAgent review, unified models, cross-platform |
+| v5.5.0 | 2026-04-02 | Architecture upgrade, adaptive scanning |
+| v5.2.0 | 2026-04-02 | Enhanced deobfuscation |
+| v5.1.0 | 2026-04-01 | Baseline tracking, correlation analysis |
+| v5.0.0 | 2026-03-31 | Initial release |
 
 ---
 
-## 🤝 Acknowledgments
+## 🤝 Contributing
 
-This project's threat intelligence and detection capabilities reference research from:
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-- [Koi.ai](https://koi.ai) — ClawHavoc Report (341 malicious skills)
-- [Snyk](https://snyk.io) — ToxicSkills Campaign Analysis
-- [SmartChainArk](https://github.com/smartchainark/skill-security-audit) — 13 detectors + false positive tuning
-- [SlowMist Security](https://slowmist.com) — ClawHub poisoning analysis
-- [Tencent Keen Lab](https://ke.tencent.com) — OpenClaw Skills risk analysis
-- [MurphySec](https://murphysec.com) — AI Agent Security Report
+### Development Setup
+
+```bash
+# Clone and install dependencies
+git clone https://github.com/1997xxx/X-Skill-Scanner.git
+cd X-Skill-Scanner
+pip install PyYAML
+
+# Run tests
+python3 -m pytest tests/
+
+# Run self-check
+python3 lib/self_check.py
+```
 
 ---
 
 ## 📄 License
 
-MIT License
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## ☕ Sponsor / 赞赏
+## 🙏 Acknowledgments
 
-If this project helps you, consider buying me a coffee! 如果这个项目对你有帮助，欢迎赞赏支持～
-
-![Reward QR Code](assets/reward-qrcode.png)
+- [SlowMist Security](https://slowmist.com) for malicious skill monitoring data
+- [OpenClaw](https://github.com/openclaw/openclaw) for the multi-agent communication framework
+- All contributors who reported vulnerabilities and suggested improvements
 
 ---
 
-**X Skill Scanner Team** — Your AI skill security guardian 🛡️
-
-*Version: v6.0.0 | Updated: 2026-04-02*
+*Version: v6.0.0 | Updated: 2026-04-03*
