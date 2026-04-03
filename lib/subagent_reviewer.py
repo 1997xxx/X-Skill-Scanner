@@ -18,9 +18,16 @@ LLM 二次审查引擎 v6.0 — SubAgent-Based Review
 
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 from dataclasses import dataclass
+
+
+def _p(*args, **kwargs):
+    """Progress output to stderr — doesn't interfere with JSON/SARIF stdout."""
+    kwargs.setdefault('file', sys.stderr)
+    print(*args, **kwargs)
 
 
 @dataclass
@@ -285,17 +292,17 @@ class SubAgentReviewer:
         }
         task_file.write_text(json.dumps(task_data, ensure_ascii=False, indent=2), encoding='utf-8')
         
-        print(f"   📋 审查任务已写入: {task_file}")
-        print(f"   🤖 请使用以下命令启动子 Agent 审查:")
-        print(f"      sessions_spawn({{")
-        print(f"          task: '读取 {task_file} 中的审查任务，执行安全审查，将结果写回同一目录的 .scanner_review_result.json',")
-        print(f"          mode: 'run'")
-        print(f"      }})")
-        print(f"")
-        print(f"   ⚡ 或者直接在当前会话中让 LLM 处理审查任务")
+        _p(f"   📋 审查任务已写入: {task_file}")
+        _p(f"   🤖 请使用以下命令启动子 Agent 审查:")
+        _p(f"      sessions_spawn({{")
+        _p(f"          task: '读取 {task_file} 中的审查任务，执行安全审查，将结果写回同一目录的 .scanner_review_result.json',")
+        _p(f"          mode: 'run'")
+        _p(f"      }})")
+        _p("")
+        _p(f"   ⚡ 或者直接在当前会话中让 LLM 处理审查任务")
         
         # For now, fall back to heuristic when running outside OpenClaw
-        print(f"\n   ⚡ 子 Agent 模式需要交互式环境，切换到启发式审查")
+        _p(f"\n   ⚡ 子 Agent 模式需要交互式环境，切换到启发式审查")
         return self._review_via_heuristic(findings)
     
     def _review_via_heuristic(self, findings: List[Dict]) -> List[ReviewResult]:
@@ -325,7 +332,7 @@ class SubAgentReviewer:
             try:
                 return self._review_via_subagent(findings)
             except Exception as e:
-                print(f"   ⚠️ SubAgent 审查失败: {e}，降级到启发式")
+                _p(f"   ⚠️ SubAgent 审查失败: {e}，降级到启发式")
         
         return self._review_via_heuristic(findings)
     

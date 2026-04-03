@@ -25,6 +25,12 @@ IOC 情报自动更新工具 — 纯本地模式
 import json
 import re
 import sys
+
+
+def _p(*args, **kwargs):
+    """Progress output to stderr."""
+    kwargs.setdefault('file', sys.stderr)
+    _p(*args, **kwargs)
 import csv
 import argparse
 from pathlib import Path
@@ -183,7 +189,7 @@ def fetch_url(url: str, method: str = 'GET', body: str = None) -> str:
         content = data.read().decode('utf-8', errors='ignore')
         return content
     except (URLError, HTTPError, TimeoutError) as e:
-        print(f"   ⚠️  获取失败 [{url[:60]}...]: {e}")
+        _p(f"   ⚠️  获取失败 [{url[:60]}...]: {e}")
         return ""
 
 
@@ -327,7 +333,7 @@ def extract_iocs_from_csv(content: str, field_name: str = None, domain_only: boo
                 iocs.add(value.lower())
                 
     except Exception as e:
-        print(f"   ⚠️  CSV 解析失败: {e}")
+        _p(f"   ⚠️  CSV 解析失败: {e}")
         return extract_iocs_from_text(content)
     
     return iocs
@@ -335,8 +341,8 @@ def extract_iocs_from_csv(content: str, field_name: str = None, domain_only: boo
 
 def fetch_source(source: Dict) -> Tuple[str, Set[str]]:
     """获取单个数据源的 IOC"""
-    print(f"\n📡 获取: {source['name']}")
-    print(f"   URL: {source['url'][:80]}...")
+    _p(f"\n📡 获取: {source['name']}")
+    _p(f"   URL: {source['url'][:80]}...")
     
     method = source.get('method', 'GET')
     body = source.get('body')
@@ -348,7 +354,7 @@ def fetch_source(source: Dict) -> Tuple[str, Set[str]]:
     fmt = source['format']
     iocs = parse_content(content, fmt, source)
     
-    print(f"   ✅ 提取到 {len(iocs)} 个 IOC")
+    _p(f"   ✅ 提取到 {len(iocs)} 个 IOC")
     return source['id'], iocs
 
 
@@ -366,7 +372,7 @@ def parse_content(content: str, fmt: str, source: Dict) -> Set[str]:
                 domain_only=source.get('extract_domain_only', False)
             )
         except Exception as e:
-            print(f"   ⚠️  gzip 解压失败: {e}")
+            _p(f"   ⚠️  gzip 解压失败: {e}")
             return extract_iocs_from_text(content)
     
     # ─── CIDR 格式（Spamhaus DROP / Firehol） ───────────────────
@@ -486,34 +492,34 @@ def main():
     # 统计模式
     if args.stats:
         data = load_existing_ioc(intel_path)
-        print("📊 当前威胁情报统计")
-        print(f"   版本: {data.get('version')}")
-        print(f"   更新时间: {data.get('updated')}")
-        print(f"   来源: {', '.join(data.get('sources', []))}")
-        print(f"   恶意技能名: {len(data.get('known_malicious_names', []))} 条")
-        print(f"   IOC 域名/IP: {len(data.get('ioc_domains', []))} 条")
+        _p("📊 当前威胁情报统计")
+        _p(f"   版本: {data.get('version')}")
+        _p(f"   更新时间: {data.get('updated')}")
+        _p(f"   来源: {', '.join(data.get('sources', []))}")
+        _p(f"   恶意技能名: {len(data.get('known_malicious_names', []))} 条")
+        _p(f"   IOC 域名/IP: {len(data.get('ioc_domains', []))} 条")
         
         iocs = data.get('ioc_domains', [])
         ips = [i for i in iocs if re.match(r'^\d+\.\d+\.\d+\.\d+$', i)]
         domains = [i for i in iocs if not re.match(r'^\d+\.\d+\.\d+\.\d+$', i)]
-        print(f"     ├─ IP 地址: {len(ips)} 条")
-        print(f"     └─ 域名: {len(domains)} 条")
-        print(f"   CIDR 网段: {len(data.get('cidr_ranges', []))} 个（Spamhaus DROP + Firehol）")
+        _p(f"     ├─ IP 地址: {len(ips)} 条")
+        _p(f"     └─ 域名: {len(domains)} 条")
+        _p(f"   CIDR 网段: {len(data.get('cidr_ranges', []))} 个（Spamhaus DROP + Firehol）")
         return
     
     # 加载现有数据
     data = load_existing_ioc(intel_path)
     existing_iocs = set(i.lower() for i in data.get('ioc_domains', []))
     existing_cidrs = set(data.get('cidr_ranges', []))
-    print(f"📂 现有 IOC: {len(existing_iocs)} 条 | CIDR 网段: {len(existing_cidrs)} 个")
+    _p(f"📂 现有 IOC: {len(existing_iocs)} 条 | CIDR 网段: {len(existing_cidrs)} 个")
     
     # 筛选要更新的源
     sources = FEED_SOURCES
     if args.source:
         sources = [s for s in sources if s['id'] == args.source]
         if not sources:
-            print(f"❌ 未知源: {args.source}")
-            print(f"可用源: {', '.join(s['id'] for s in FEED_SOURCES)}")
+            _p(f"❌ 未知源: {args.source}")
+            _p(f"可用源: {', '.join(s['id'] for s in FEED_SOURCES)}")
             sys.exit(1)
     
     # 获取所有源 — 分离 IOC 和 CIDR
@@ -537,7 +543,7 @@ def main():
             updated_sources.append(source['name'])
     
     if not all_new_iocs and not all_new_cidrs:
-        print("\n⚠️  未获取到新 IOC，可能是网络问题或源不可用")
+        _p("\n⚠️  未获取到新 IOC，可能是网络问题或源不可用")
         return
     
     # 合并
@@ -546,27 +552,27 @@ def main():
     new_cidrs = all_new_cidrs - existing_cidrs
     merged_cidrs = existing_cidrs | all_new_cidrs
     
-    print(f"\n📊 合并结果:")
-    print(f"   IOC 新增: {len(new_iocs)} 条 | 已有: {len(existing_iocs) - len(new_iocs)} 条（跳过）| 总计: {len(merged_iocs)} 条")
-    print(f"   CIDR 新增: {len(new_cidrs)} 个 | 已有: {len(existing_cidrs) - len(new_cidrs)} 个（跳过）| 总计: {len(merged_cidrs)} 个")
+    _p(f"\n📊 合并结果:")
+    _p(f"   IOC 新增: {len(new_iocs)} 条 | 已有: {len(existing_iocs) - len(new_iocs)} 条（跳过）| 总计: {len(merged_iocs)} 条")
+    _p(f"   CIDR 新增: {len(new_cidrs)} 个 | 已有: {len(existing_cidrs) - len(new_cidrs)} 个（跳过）| 总计: {len(merged_cidrs)} 个")
     
     if new_iocs:
-        print(f"\n🆕 新增 IOC 示例（前 10 条）:")
+        _p(f"\n🆕 新增 IOC 示例（前 10 条）:")
         for ioc in sorted(new_iocs)[:10]:
-            print(f"   + {ioc}")
+            _p(f"   + {ioc}")
         if len(new_iocs) > 10:
-            print(f"   ... 还有 {len(new_iocs) - 10} 条")
+            _p(f"   ... 还有 {len(new_iocs) - 10} 条")
     
     if new_cidrs:
-        print(f"\n🆕 新增 CIDR 网段示例（前 10 个）:")
+        _p(f"\n🆕 新增 CIDR 网段示例（前 10 个）:")
         for cidr in sorted(new_cidrs)[:10]:
-            print(f"   + {cidr}")
+            _p(f"   + {cidr}")
         if len(new_cidrs) > 10:
-            print(f"   ... 还有 {len(new_cidrs) - 10} 个")
+            _p(f"   ... 还有 {len(new_cidrs) - 10} 个")
     
     # 写入
     if args.dry_run:
-        print("\n🔍 预览模式，未写入文件")
+        _p("\n🔍 预览模式，未写入文件")
         return
     
     data['ioc_domains'] = sorted(list(merged_iocs))
@@ -583,8 +589,8 @@ def main():
     with open(intel_path, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
     
-    print(f"\n✅ 情报已更新: {intel_path}")
-    print(f"   总 IOC 数: {len(merged_iocs)} 条")
+    _p(f"\n✅ 情报已更新: {intel_path}")
+    _p(f"   总 IOC 数: {len(merged_iocs)} 条")
 
 
 if __name__ == '__main__':
