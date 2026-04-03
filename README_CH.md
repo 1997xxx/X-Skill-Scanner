@@ -4,10 +4,59 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-v5.5.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v6.3.0-blue.svg)](CHANGELOG.md)
 [![GitHub Stars](https://img.shields.io/github/stars/1997xxx/X-Skill-Scanner?style=social)](https://github.com/1997xxx/X-Skill-Scanner)
 
 📖 [English README →](README.md)
+
+---
+
+## 🆕 v6.3 版本亮点
+
+**新增功能 (2026-04-03):**
+
+### 📊 Mode A - 批量扫描模式
+一键扫描平台安装的所有技能，快速识别高风险技能。
+
+```bash
+# 批量扫描 OpenClaw 平台所有技能
+python3 lib/scanner.py --mode batch --platform openclaw
+
+# 仅输出汇总表格
+python3 lib/scanner.py --mode batch --platform openclaw --summary-only
+```
+
+### 🌍 多平台支持 - 22 个 Agent 平台
+从 7 个主流平台扩展到**22 个平台**，覆盖 IDE、企业、开源框架。
+
+| 类别 | 平台 |
+|------|------|
+| **主流 Agent** | openclaw, codebuddy, cursor, windsurf, claude, qclaw, workbuddy |
+| **IDE AI** | vscode, jetbrains |
+| **中国平台** | tencent-coding, aliyun-lingma, baidu-comate |
+| **开源框架** | langchain, auto-gpt, crewai |
+| **企业平台** | gitlab-duo, github-copilot |
+
+### 🈺 完整 i18n 多语言体系
+支持中文/英文报告，自动检测用户语言，静默切换。
+
+```bash
+python3 lib/scanner.py -t ./my-skill/ --lang en  # English report
+python3 lib/scanner.py -t ./my-skill/ --lang zh  # 中文报告
+```
+
+### 🧪 测试覆盖
+新增 `tests/test_platform_discovery.py` - **21 个单元测试**，覆盖率 100%。
+
+```bash
+python3 -m pytest tests/test_platform_discovery.py -v
+# ✅ 21 passed in 0.41s
+```
+
+### 📝 用户友好报告
+- 用通俗语言描述风险（"执行隐藏的恶意命令" vs "Base64 解码执行"）
+- 明确的安装建议（🟢 可安装 / 🟡 需关注 / 🔴 不要安装）
+- 强制性页脚统一品牌
 
 ---
 
