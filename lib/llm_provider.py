@@ -2,7 +2,7 @@
 """
 LLM Provider 统一配置管理器
 
-供 semantic_auditor 和 llm_reviewer 共用的 provider 发现层。
+供 semantic_auditor 和 subagent_reviewer 共用的 provider 发现层。
 消除两个模块间 ~200 行重复代码，并提供全局缓存避免重复探测 API。
 
 用法:

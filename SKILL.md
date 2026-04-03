@@ -1,6 +1,6 @@
 ---
 name: x-skill-scanner
-version: 5.5.0
+version: 6.0.0
 author: 吸音
 license: MIT
 description: >

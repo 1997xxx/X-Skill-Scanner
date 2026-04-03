@@ -81,7 +81,8 @@ def main():
 
     checks = [
         ('static_analyzer', None),
-        ('llm_reviewer', 'LLMReviewer'),
+        # ('_deprecated_llm_reviewer', 'LLMReviewer'),  # Deprecated in v6.0
+        ('subagent_reviewer', 'SubAgentReviewer'),
         ('semantic_auditor', 'SemanticAuditor'),
         ('dependency_checker', None),
         ('deobfuscator', None),

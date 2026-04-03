@@ -262,7 +262,8 @@ class SubAgentReviewer:
             findings_list=findings_context,
         )
     
-    def review_via_subagent(self, findings: List[Dict]) -> List[ReviewResult]:
+    def _review_via_subagent(self, findings: List[Dict]) -> List[ReviewResult]:
+        """Internal: SubAgent-based review via sessions_spawn"""
         """
         通过 sessions_spawn 启动子 Agent 进行审查。
         
@@ -295,9 +296,10 @@ class SubAgentReviewer:
         
         # For now, fall back to heuristic when running outside OpenClaw
         print(f"\n   ⚡ 子 Agent 模式需要交互式环境，切换到启发式审查")
-        return self.review_via_heuristic(findings)
+        return self._review_via_heuristic(findings)
     
-    def review_via_heuristic(self, findings: List[Dict]) -> List[ReviewResult]:
+    def _review_via_heuristic(self, findings: List[Dict]) -> List[ReviewResult]:
+        """Internal: Pure heuristic review (no external dependencies)"""
         """纯启发式审查 — 不依赖任何外部服务"""
         results = []
         for finding in findings:
@@ -321,11 +323,11 @@ class SubAgentReviewer:
         
         if use_subagent:
             try:
-                return self.review_via_subagent(findings)
+                return self._review_via_subagent(findings)
             except Exception as e:
                 print(f"   ⚠️ SubAgent 审查失败: {e}，降级到启发式")
         
-        return self.review_via_heuristic(findings)
+        return self._review_via_heuristic(findings)
     
     def get_summary(self) -> Dict:
         """获取审查摘要"""
