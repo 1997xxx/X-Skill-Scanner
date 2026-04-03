@@ -602,7 +602,9 @@ class ReportGenerator:
         html += '<h3 style="margin:0 0 16px;color:'+summary_color+'">'+summary_header+'</h3>\n'
         html += '<div class="sumrow"><span class="sumlbl">风险等级 / Risk Level</span><span>'+rl+'</span></div>\n'
         html += '<div class="sumrow"><span class="sumlbl">风险分数 / Risk Score</span><span>'+str(rs)+'/100</span></div>\n'
-        html += '<div class="sumrow"><span class="sumlbl">安全问题 / Security Issues</span><span>'+str(total_findings)+' 个（'+str(crit_count)+' CRITICAL + '+str(high_count)+' HIGH + '+str(med_count)+' MEDIUM + '+str(low_count)+' LOW）</span></div>\n'
+        html += '<div class="sumrow"><span class="sumlbl">安全问题</span>'
+        html += '<span>%d 个 (%d CRITICAL + %d HIGH)</span></div>' % (
+        total_findings, crit_count, high_count)
         html += '<div class="sumrow"><span class="sumlbl">结论 / Verdict</span><span>'+self._esc(vt)+'</span></div>\n'
         html += '</div>\n'
         
@@ -640,12 +642,12 @@ class ReportGenerator:
             
             if decoded_payloads:
                 html += '<h2 style="color:#dc3545;margin-top:24px">&#x1F6A8; 解码后的恶意载荷 / Decoded Malicious Payloads</h2>\n'
-                html += '<div style="background:#fff3cd;border-left:4px solid #dc3545;padding:16px;border-radius:6px">\n'
+                html += '<div class="finding-card" style="border-left-color:#dc3545">\n'
                 html += '<p style="margin:0 0 12px;color:#856404;font-weight:600">&#x26A0;&#xFE0F; 以下是扫描器从混淆代码中还原出的真实内容 — 这是判断技能是否恶意的最关键证据。</p>\n'
                 for i, dp in enumerate(decoded_payloads, 1):
                     html += f'<div style="margin-bottom:12px">\n'
                     html += f'<strong>载荷 #{i}</strong> — {self._esc(dp["file"])}:{dp["line"]} [{self._esc(dp["technique"])}]\n'
-                    html += f'<pre style="background:#1a1a2e;color:#e9456e;padding:12px;border-radius:4px;overflow-x:auto;margin:6px 0;font-size:13px">{self._esc(dp["content"])}</pre>\n'
+                    html += '<pre class="exfil-pattern">%s</pre>' % self._esc(dp["content"])
                     html += f'</div>\n'
                 html += '</div>\n'
         
@@ -683,7 +685,9 @@ class ReportGenerator:
                 href = ''
                 cls = 'layer-row'
             if href:
-                html += '<tr class="'+cls+'"><td>'+label_cn+'</td><td style="color:'+row_color+';font-weight:600"><a href="'+href+'" style="color:'+row_color+';text-decoration:none;font-weight:600">'+status+'</a></td></tr>\n'
+                html += '<tr class="'+cls+'"><td>'+label_cn+'</td>'
+                html += '<td style="color:%s;font-weight:600"><a href="#f%d">%s</a></td></tr>' % (
+                    row_color, idx, str(len(findings_grouped)))
             else:
                 html += '<tr class="'+cls+'"><td>'+label_cn+'</td><td style="color:'+row_color+';font-weight:600">'+status+'</td></tr>\n'
         html += '</table>\n'
@@ -699,12 +703,13 @@ class ReportGenerator:
             html += '<h2>&#x26A0;&#xFE0F; 攻击手法分析 / Attack Pattern Analysis</h2>\n'
             for item in aa:
                 sev_color = {'CRITICAL':'#dc3545','HIGH':'#fd7e14','MEDIUM':'#ffc107'}.get(item.get('severity','#6c757d'))
-                html += '<div style="background:#fff;border-left:4px solid '+sev_color+';padding:16px;margin:12px 0;border-radius:0 8px 8px 0;box-shadow:0 1px 4px rgba(0,0,0,.06)">\n'
+                html += '<div class="finding-card" style="border-left-color:%s">' % sev_color
                 html += '<h3 style="margin:0 0 8px;color:'+sev_color+'">'+self._esc(item['title'])+'</h3>\n'
-                html += '<p style="margin:4px 0;font-size:13px"><b>Type:</b> '+self._esc(item['type'])+' | <b>Severity:</b> <span style="color:'+sev_color+';font-weight:700">'+item['severity']+'</span></p>\n'
+                html += '<p class="finding-meta"><b>Type:</b> %s | <b>Severity:</b> %s</p>' % (
+                    self._esc(item.get('type', '?')), sev_text)
                 html += '<p style="margin:4px 0;font-size:14px">'+self._esc(item['description'])+'</p>\n'
                 if item.get('evidence'):
-                    html += '<pre style="background:#f8f9fa;padding:8px;border-radius:4px;font-size:12px;overflow-x:auto;margin:8px 0">'+self._esc(item['evidence'])+'</pre>\n'
+                    html += '<pre class="inline-code">%s</pre>' % self._esc(item.get('code', ''))
                 if item.get('impact'):
                     html += '<p style="margin:4px 0;font-size:13px;color:#dc3545"><b>&#x1F4A5; Impact:</b> '+self._esc(item['impact'])+'</p>\n'
                 html += '<p style="margin:4px 0;font-size:13px;color:#28a745"><b>&#x1F527; Fix:</b> '+self._esc(item['remediation'])+'</p>\n'
@@ -766,7 +771,8 @@ class ReportGenerator:
         lines.append('|--------------|---------------|')
         lines.append(f'| 风险等级 / Risk Level | {rl} |')
         lines.append(f'| 风险分数 / Risk Score | {rs}/100 |')
-        lines.append(f'| 安全问题 / Security Issues | {total_findings} 个（{crit_count} CRITICAL + {high_count} HIGH + {med_count} MEDIUM + {low_count} LOW） |')
+        lines.append('| 安全问题 | %d 个 (%d CRITICAL + %d HIGH + %d MEDIUM + %d LOW) |' % (
+            total_findings, crit_count, high_count, med_count, low_count))
         lines.append(f'| 结论 / Verdict | {vt} |')
         lines.append('')
         

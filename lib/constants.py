@@ -103,3 +103,7 @@ td{padding:8px 10px;border-bottom:1px solid #eee;vertical-align:top;
 HTML_SUMROW = '<div class="sumrow"><span class="sumlbl">{label}</span><span>{value}</span></div>'
 HTML_FINDING_ROW = '<tr class="{cls}"><td>{label}</td><td style="color:{color};font-weight:700">{val}</td></tr>'
 HTML_CODE_BLOCK = '<pre style="background:#1a1a2e;color:#e9456e;padding:10px;border-radius:4px;overflow-x:auto"><code>{code}</code></pre>'
+HTML_FINDING_CARD = '<div style="background:#fff;border-left:4px solid {color};padding:16px;border-radius:4px;margin:8px 0">'
+HTML_FINDING_META = '<p style="margin:4px 0;font-size:13px"><b>Type:</b> {type} | <b>Severity:</b> {sev}</p>'
+HTML_FINDING_DESC = '<p style="margin:8px 0 4px;font-size:14px;line-height:1.5">{desc}</p>'
+HTML_INLINE_CODE = '<pre style="background:#f8f9fa;padding:8px;border-radius:4px;font-size:12px;overflow-x:auto"><code>{code}</code></pre>'
