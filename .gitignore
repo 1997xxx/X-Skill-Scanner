@@ -29,3 +29,8 @@ config/api_keys.*
 lib/threat_intel.json
 .skills-snapshot-multi.txt
 *.snapshot*
+
+# 本地测试报告（含敏感配置）
+docs/*-LOCAL*.md
+LLM-REVIEW-TEST-REPORT*.md
+lib/llm_provider_simple.py
