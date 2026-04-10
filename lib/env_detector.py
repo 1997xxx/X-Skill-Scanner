@@ -17,6 +17,8 @@ Environment Detector - AI Agent 环境检测模块
     agent_info = detect_ai_agent()
     llm_config = get_llm_config()
     connection_status = check_llm_connection()
+
+注意: 此模块现在使用 platform_registry 作为后端来获取平台信息。
 """
 
 import os
@@ -30,6 +32,19 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime
+
+# 尝试导入 platform_registry 作为后端
+try:
+    from platform_registry import (
+        PlatformType,
+        PlatformRegistry,
+        get_current_platform_info as _get_platform_info,
+        get_llm_config as _get_llm_config_from_registry,
+        get_api_key as _get_api_key_from_registry,
+    )
+    _PLATFORM_REGISTRY_AVAILABLE = True
+except ImportError:
+    _PLATFORM_REGISTRY_AVAILABLE = False
 
 
 class AgentPlatform(Enum):
@@ -301,7 +316,30 @@ def detect_ai_agent() -> AgentInfo:
     Returns:
         AgentInfo: 检测到的 Agent 信息
     """
-    # 按优先级检测
+    # 优先使用 platform_registry
+    if _PLATFORM_REGISTRY_AVAILABLE:
+        try:
+            platform_info = _get_platform_info()
+            if platform_info.detected:
+                # 映射 PlatformType 到 AgentPlatform
+                platform_map = {
+                    PlatformType.OPENCLAW: AgentPlatform.OPENCLAW,
+                    PlatformType.CLAUDE_CODE: AgentPlatform.CLAUDE_CODE,
+                    PlatformType.CURSOR: AgentPlatform.CURSOR,
+                    PlatformType.WINDSURF: AgentPlatform.WINDSURF,
+                    PlatformType.QCLAW: AgentPlatform.QCLAW,
+                    PlatformType.COP_AW: AgentPlatform.COP_AW,
+                }
+                return AgentInfo(
+                    platform=platform_map.get(platform_info.platform, AgentPlatform.UNKNOWN),
+                    platform_name=platform_info.name,
+                    is_available=True,
+                    config_path=str(platform_info.skills_dirs[0]) if platform_info.skills_dirs else None
+                )
+        except Exception:
+            pass
+
+    # 回退到原有检测逻辑
     detectors = [
         _get_openclaw_info,
         _get_claude_code_info,
@@ -332,13 +370,31 @@ def get_llm_config() -> Optional[LLMConfig]:
     获取 LLM 配置信息
 
     配置来源优先级:
-    1. 环境变量 (OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_MODEL)
-    2. OpenClaw 配置文件 (openclaw.json)
-    3. 其他 Agent 配置文件
+    1. platform_registry (统一的平台适配器)
+    2. 环境变量 (OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_MODEL)
+    3. OpenClaw 配置文件 (openclaw.json)
+    4. 其他 Agent 配置文件
 
     Returns:
         LLMConfig: LLM 配置信息，如果无法获取则返回 None
     """
+    # 优先使用 platform_registry
+    if _PLATFORM_REGISTRY_AVAILABLE:
+        try:
+            config = _get_llm_config_from_registry()
+            if config:
+                return LLMConfig(
+                    provider=config.provider,
+                    base_url=config.base_url,
+                    model=config.model,
+                    api_type=config.api_type,
+                    has_api_key=config.has_api_key,
+                    key_prefix=config.key_prefix,
+                    config_source=config.config_source
+                )
+        except Exception:
+            pass
+
     # 1. 尝试从环境变量获取
     api_key = os.environ.get('OPENAI_API_KEY') or os.environ.get('OPENAI_API_KEY')
     base_url = os.environ.get('OPENAI_BASE_URL')
@@ -449,13 +505,21 @@ def check_llm_connection(config: Optional[LLMConfig] = None, timeout: int = 10) 
     url = config.base_url.rstrip('/')
     api_type = config.api_type
 
-    # 添加后缀
-    if api_type == 'openai-chat' and '/chat/completions' not in url:
-        if url.endswith('/v1'):
-            url = f"{url}/chat/completions"
-        elif '/api/' in url:
-            base = url[:url.index('/api/')]
-            url = f"{base}/v1/chat/completions"
+    # 添加后缀 - 根据 API 类型
+    if api_type == 'openai-chat':
+        if '/chat/completions' not in url:
+            if url.endswith('/v1'):
+                url = f"{url}/chat/completions"
+            elif '/api/' in url:
+                base = url[:url.index('/api/')]
+                url = f"{base}/v1/chat/completions"
+    elif api_type == 'openai-completions':
+        if '/completions' not in url:
+            if url.endswith('/v1'):
+                url = f"{url}/completions"
+            elif '/api/' in url:
+                base = url[:url.index('/api/')]
+                url = f"{base}/v1/completions"
 
     # 构建请求体
     if api_type == 'anthropic-messages':
@@ -466,8 +530,19 @@ def check_llm_connection(config: Optional[LLMConfig] = None, timeout: int = 10) 
         }
         headers = {
             'Content-Type': 'application/json',
-            'x-api-key': config.key_prefix.replace('...', ''),  # 完整 key 需要从 config 获取
+            'x-api-key': '',  # 完整 key 需要从 config 获取
             'anthropic-version': '2023-06-01',
+        }
+    elif api_type == 'openai-completions':
+        # Completions API 使用 prompt 而不是 messages
+        payload = {
+            'model': config.model,
+            'prompt': 'hi',
+            'max_tokens': 10,
+        }
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ',  # 完整 key 稍后添加
         }
     else:
         payload = {
@@ -477,7 +552,7 @@ def check_llm_connection(config: Optional[LLMConfig] = None, timeout: int = 10) 
         }
         headers = {
             'Content-Type': 'application/json',
-            'Authorization': f'Bearer {config.key_prefix.replace("...", "")}',
+            'Authorization': 'Bearer ',  # 完整 key 稍后添加
         }
 
     # 发送探测请求
@@ -585,6 +660,16 @@ def _get_full_api_key(config: LLMConfig) -> Optional[str]:
         cfg = load_openclaw_config()
         if cfg:
             providers = cfg.get('models', {}).get('providers', {})
+
+            # 如果配置中指定了 provider，优先使用该 provider 的 key
+            if config and config.provider:
+                prov_cfg = providers.get(config.provider)
+                if prov_cfg:
+                    key = prov_cfg.get('apiKey')
+                    if key:
+                        return key
+
+            # 否则使用第一个可用的 key
             for prov_cfg in providers.values():
                 key = prov_cfg.get('apiKey')
                 if key:
