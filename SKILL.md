@@ -1,12 +1,13 @@
 ---
 name: x-skill-scanner
-version: 6.0.0
+version: 6.1.0
 author: 吸音
 license: MIT
 description: >
   AI Agent 技能安全扫描器 - 在安装任何新技能前自动检测恶意代码、凭证窃取、提示词注入等安全威胁。
   Enterprise-grade security scanner for AI Agent skills. Auto-scans before skill installation to detect malware, credential theft, and prompt injection.
   Triggers when user wants to install/scan/audit skills. MUST scan before any skill installation.
+  v6.1: 懒加载引擎系统 (启动 0.05s)，缓存加速 10x，并行扫描 2-3x。
 keywords: [security, scan, audit, skill-security, malware-detection, credential-theft, prompt-injection]
 triggers:
   # 核心触发词（高频优先）
@@ -231,4 +232,4 @@ python3 lib/scanner.py --mode batch --platform openclaw
 
 ---
 
-*版本：v6.0.0 | 最后更新：2026-04-09*
+*版本：v6.1.0 | 最后更新：2026-04-10*

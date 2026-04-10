@@ -4,14 +4,14 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-v6.3.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v6.1.0-blue.svg)](CHANGELOG.md)
 [![GitHub Stars](https://img.shields.io/github/stars/1997xxx/X-Skill-Scanner?style=social)](https://github.com/1997xxx/X-Skill-Scanner)
 
 📖 [中文文档 →](README_CH.md)
 
 ---
 
-## 🆕 What's New in v6.3
+## 🆕 What's New in v6.1
 
 **New Features (2026-04-03):**
 

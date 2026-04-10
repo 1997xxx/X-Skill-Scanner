@@ -1,6 +1,6 @@
 # X-Skill-Scanner Version History
 
-## Current Version: v6.1.0 (2026-04-04)
+## Current Version: v6.1.0 (2026-04-10)
 
 ### v6.1.0 - Performance Optimization & Enhanced Testing
 
