@@ -1,6 +1,49 @@
 # X-Skill-Scanner Version History
 
-## Current Version: v6.0.0 (2026-04-03)
+## Current Version: v6.1.0 (2026-04-04)
+
+### v6.1.0 - Performance Optimization & Enhanced Testing
+
+**Release Date:** 2026-04-04
+
+**Major Changes:**
+- Lazy loading engine system (startup time: ~2s → ~0.14s)
+- Async LLM review with ThreadPoolExecutor
+- Scan result caching with SHA256 validation
+- Parallel scanning with configurable workers
+- Layered output (concise/standard/detailed modes)
+- Enhanced HTML reports with Chart.js visualization
+- Comprehensive test suite with malicious skill samples
+
+**New Files:**
+- `lib/engine_loader.py` - Lazy loading engine manager
+- `lib/scanner_lazy.py` - Lazy loading scanner implementation
+- `lib/reporter_enhanced.py` - Enhanced reporter with layered output
+- `lib/scan_cache.py` - Cache persistence module
+- `lib/parallel_scanner.py` - Parallel scanning module
+- `tests/test_malicious_detection.py` - Malicious skill detection tests
+- `tests/test_performance.py` - Performance benchmark tests
+- `references/installation-flows.md` - Installation documentation
+
+**Test Data:**
+- `tests/test_data/malicious/weather-query/` - Base64 backdoor sample
+- `tests/test_data/malicious/nova-stealer/` - Credential theft sample
+- `tests/test_data/malicious/reverse-shell/` - C2 beacon sample
+- `tests/test_data/safe/simple-helper/` - Safe skill sample
+- `tests/test_data/edge_cases/security-tool/` - Edge case sample
+
+**Performance Metrics:**
+- Startup time: 0.138s (7 engines loaded)
+- Quick scan: ~30% faster than standard
+- Cache hit: ~10x speedup
+- Parallel scan: ~2-3x speedup on multi-core
+
+**SKILL.md Optimization:**
+- Reduced from 499 lines to 233 lines (53% reduction)
+- Layered trigger words (core → extended → context)
+- Moved detailed docs to references/
+
+---
 
 ### v6.0.0 - Architecture Upgrade & Code Quality
 

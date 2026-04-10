@@ -5,6 +5,70 @@ All notable changes to X-Skill-Scanner will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.1.0] - 2026-04-04
+
+### 🚀 Performance Optimization
+
+#### Lazy Loading System
+- **New:** `lib/engine_loader.py` — Lazy loading engine manager
+- **New:** `lib/scanner_lazy.py` — Scanner with on-demand engine loading
+- **Strategies:** quick (7 engines), standard (16 engines), full (all engines)
+- **Startup time:** ~2s → ~0.14s (93% improvement)
+
+#### Async Operations
+- **New:** Async LLM review with `ThreadPoolExecutor`
+- **Timeout:** 60s configurable timeout for LLM operations
+- **Non-blocking:** Scanner returns immediately, LLM review in background
+
+#### Scan Caching
+- **New:** `lib/scan_cache.py` — Persistent cache with SHA256 validation
+- **Cache location:** `~/.openclaw/cache/x-skill-scanner/`
+- **Max age:** 7 days
+- **Speedup:** ~10x on cache hits
+
+#### Parallel Scanning
+- **New:** `lib/parallel_scanner.py` — Multi-threaded/process scanning
+- **Configurable workers:** 1-8 parallel workers
+- **Speedup:** ~2-3x on multi-core systems
+
+### 📊 Enhanced Reporting
+
+#### Layered Output
+- **New:** `lib/reporter_enhanced.py` — Three output modes
+  - `concise`: One line per finding (for terminals)
+  - `standard`: Default detailed output
+  - `detailed`: Full context with code snippets
+
+#### HTML Reports
+- **Chart.js visualization:** Risk distribution charts
+- **Responsive design:** Mobile-friendly layout
+- **Interactive:** Collapsible sections, search
+
+### 🧪 Testing Improvements
+
+#### Malicious Skill Samples
+- **weather-query:** Base64 encoded backdoor
+- **nova-stealer:** Credential theft with osascript phishing
+- **reverse-shell:** C2 beacon and reverse shell
+
+#### Test Suites
+- **New:** `tests/test_malicious_detection.py` — Detection accuracy tests
+- **New:** `tests/test_performance.py` — Performance benchmarks
+- **Edge cases:** Security tool with security keywords (no false positives)
+
+### 📝 Documentation
+
+#### SKILL.md Optimization
+- **Reduced:** 499 → 233 lines (53% reduction)
+- **Layered triggers:** Core → Extended → Context
+- **Moved:** Detailed installation docs to `references/installation-flows.md`
+
+#### New Documentation
+- `docs/OPTIMIZATION_REPORT.md` — Complete optimization report
+- `references/installation-flows.md` — Detailed installation guide
+
+---
+
 ## [6.0.0] - 2026-04-03
 
 ### 🚀 Major Architecture Changes

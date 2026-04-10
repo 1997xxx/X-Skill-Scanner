@@ -34,3 +34,5 @@ lib/threat_intel.json
 docs/*-LOCAL*.md
 LLM-REVIEW-TEST-REPORT*.md
 lib/llm_provider_simple.py
+test_*.py
+debug_*.py
