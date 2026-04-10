@@ -214,4 +214,4 @@ ls -la ~/.openclaw/skills/x-skill-scanner/lib/scanner.py
 
 ---
 
-*版本：v6.0.0 | 最后更新：2026-04-09*
+*版本：v6.1.0 | 最后更新：2026-04-10*

@@ -465,4 +465,4 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 
 ---
 
-*Version: v6.0.0 | Updated: 2026-04-03*
+*Version: v6.1.0 | Updated: 2026-04-10*
