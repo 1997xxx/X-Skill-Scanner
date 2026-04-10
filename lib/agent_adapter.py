@@ -175,7 +175,8 @@ class HeuristicAdapter(AgentAdapter):
         return True  # 始终可用
 
     def submit_review_task(self, prompt: str, context: Dict) -> str:
-        task_id = f"heuristic_{int(time.time() * 1000)}"
+        import uuid
+        task_id = f"heuristic_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}"
         task = ReviewTask(
             task_id=task_id,
             prompt=prompt,

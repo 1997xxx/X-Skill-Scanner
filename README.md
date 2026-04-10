@@ -329,7 +329,7 @@ python3 lib/scanner.py --help
 ## 📊 Sample Output
 
 ```
-🔍 X Skill Scanner v6.0.0
+🔍 X Skill Scanner v6.1.0
 Scanning: ./my-skill/
 
 🎯 Step 0/7: Skill Profiling...
@@ -418,7 +418,7 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 | Version | Date | Highlights |
 |---------|------|-----------|
-| **v6.0.0** | 2026-04-03 | SubAgent review, unified models, cross-platform |
+| **v6.1.0** | 2026-04-10 | Multi-platform Agent Adapter, performance optimization |
 | v5.5.0 | 2026-04-02 | Architecture upgrade, adaptive scanning |
 | v5.2.0 | 2026-04-02 | Enhanced deobfuscation |
 | v5.1.0 | 2026-04-01 | Baseline tracking, correlation analysis |

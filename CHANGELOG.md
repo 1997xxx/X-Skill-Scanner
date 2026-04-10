@@ -31,6 +31,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Configurable workers:** 1-8 parallel workers
 - **Speedup:** ~2-3x on multi-core systems
 
+#### Multi-Platform Agent Adapter
+- **New:** `lib/agent_adapter.py` — Abstract adapter interface and factory
+- **New:** `lib/adapters/` — Platform-specific adapters
+  - `openclaw_adapter.py` — OpenClaw (sessions_spawn)
+  - `claude_code_adapter.py` — Claude Code (claude CLI)
+  - `cursor_adapter.py` — Cursor/Windsurf (CLI)
+  - `qclaw_adapter.py` — QClaw/CoPaw (CLI/API)
+- **Config:** `config/agent_adapters.yaml` — Adapter configuration
+- **Supported platforms:** OpenClaw, Claude Code, Cursor, Windsurf, QClaw, CoPaw, Heuristic
+
 ### 📊 Enhanced Reporting
 
 #### Layered Output
