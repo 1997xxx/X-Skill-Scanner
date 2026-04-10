@@ -1,0 +1,123 @@
+# Agent Adapter Configuration
+# X-Skill-Scanner v6.1 - Multi-Platform Agent Support
+
+# ============================================================
+# 适配器配置
+# ============================================================
+
+adapters:
+  # OpenClaw - 蚂蚁 AI Agent 平台
+  openclaw:
+    enabled: true
+    priority: 1
+    config:
+      task_dir: "~/.openclaw/tasks"
+      result_dir: "~/.openclaw/results"
+    env_vars:
+      - OPENCLAW_SESSION_ID
+
+  # Claude Code - Anthropic Claude CLI
+  claude:
+    enabled: true
+    priority: 2
+    config:
+      cli_path: "claude"
+      result_dir: "/tmp/claude_reviews"
+    env_vars:
+      - ANTHROPIC_API_KEY
+      - ANTHROPIC_MODEL
+
+  # Cursor IDE
+  cursor:
+    enabled: true
+    priority: 3
+    config:
+      cli_path: "cursor"
+      result_dir: "/tmp/cursor_reviews"
+    env_vars:
+      - CURSOR_API_KEY
+
+  # Windsurf
+  windsurf:
+    enabled: true
+    priority: 4
+    config:
+      cli_path: "windsurf"
+      result_dir: "/tmp/windsurf_reviews"
+    env_vars:
+      - WINDSURF_API_KEY
+
+  # QClaw - 蚂蚁内部 AI Agent
+  qclaw:
+    enabled: true
+    priority: 5
+    config:
+      cli_path: "qclaw"
+      api_endpoint: "http://localhost:8080"
+      result_dir: "/tmp/qclaw_reviews"
+    env_vars:
+      - QCLAW_API_KEY
+
+  # CoPaw - 蚂蚁内部 AI Agent
+  copaw:
+    enabled: true
+    priority: 6
+    config:
+      cli_path: "copaw"
+      api_endpoint: "http://localhost:9090"
+      result_dir: "/tmp/copaw_reviews"
+    env_vars:
+      - COP AW_API_KEY
+
+  # GitHub Copilot
+  github_copilot:
+    enabled: false
+    priority: 7
+    config:
+      api_endpoint: "https://api.github.com"
+    env_vars:
+      - GITHUB_TOKEN
+
+  # Heuristic - 纯规则，无外部依赖
+  heuristic:
+    enabled: true
+    priority: 999
+    config: {}
+
+# ============================================================
+# 自动检测配置
+# ============================================================
+
+auto_detect:
+  enabled: true
+  # 检测顺序按 priority 排序
+  fallback_to_heuristic: true
+
+# ============================================================
+# 超时配置
+# ============================================================
+
+timeouts:
+  default: 60
+  openclaw: 120
+  claude: 90
+  cursor: 90
+  windsurf: 90
+  qclaw: 60
+  copaw: 60
+  heuristic: 0  # 即时返回
+
+# ============================================================
+# 重试配置
+# ============================================================
+
+retry:
+  enabled: true
+  max_attempts: 3
+  backoff_seconds: 2
+  # 哪些平台支持重试
+  platforms:
+    - openclaw
+    - claude
+    - qclaw
+    - copaw
