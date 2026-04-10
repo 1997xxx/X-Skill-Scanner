@@ -1686,6 +1686,16 @@ def main():
         action='store_true',
         help='仅输出汇总表格 (Mode A 批量扫描)',
     )
+    parser.add_argument(
+        '--check-env-only',
+        action='store_true',
+        help='仅检测 AI Agent 环境和 LLM 配置，不执行扫描',
+    )
+    parser.add_argument(
+        '--no-env-check',
+        action='store_true',
+        help='跳过环境检测（AI Agent 和 LLM 配置）',
+    )
 
     args = parser.parse_args()
 
@@ -1720,9 +1730,48 @@ def main():
             _p(f"❌ 下载失败: {e}")
             sys.exit(1)
 
+    # ─── v6.2: 环境检测 (AI Agent + LLM 配置) ────────────────────────
+    # 在扫描前检测当前 AI Agent 环境和 LLM 配置
+    if args.check_env_only:
+        # 仅检测环境，不扫描
+        try:
+            from env_detector import full_env_check, print_env_report
+            env_report = full_env_check()
+            print_env_report(env_report, verbose=True)
+            sys.exit(0 if env_report.is_ready else 1)
+        except ImportError:
+            _p("❌ env_detector 模块不可用")
+            sys.exit(1)
+        except Exception as e:
+            _p(f"❌ 环境检测失败: {e}")
+            sys.exit(1)
+
     if not target_path and args.mode != 'batch':
         parser.error("请指定 -t/--target 或 --url (或使用 --mode batch 批量扫描平台所有技能)")
-    
+
+    if not args.no_env_check:
+        try:
+            from env_detector import full_env_check, print_env_report, ConnectionStatus
+            _p("\n🔍 检测 AI Agent 环境和 LLM 配置...")
+            env_report = full_env_check()
+
+            # 仅在 verbose 模式或环境异常时显示详细信息
+            if args.verbose or not env_report.is_ready:
+                print_env_report(env_report, verbose=args.verbose)
+
+            if not env_report.is_ready:
+                # 关键错误：无法进行 LLM 审查
+                if env_report.connection_result and env_report.connection_result.status != ConnectionStatus.OK:
+                    _p(f"⚠️  LLM 连接异常，将使用启发式审查模式")
+                    args.no_llm_review = True  # 自动降级
+                elif not env_report.llm_config:
+                    _p(f"⚠️  未检测到 LLM 配置，将使用启发式审查模式")
+                    args.no_llm_review = True
+        except ImportError:
+            _p("⚠️  env_detector 模块不可用，跳过环境检测")
+        except Exception as e:
+            _p(f"⚠️  环境检测失败: {e}，将继续扫描")
+
     # ─── Create Scanner (before Mode A/B check) ───────────────────
     # 创建扫描器
     scanner = SkillScanner(

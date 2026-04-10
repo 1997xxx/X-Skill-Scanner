@@ -41,6 +41,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Config:** `config/agent_adapters.yaml` — Adapter configuration
 - **Supported platforms:** OpenClaw, Claude Code, Cursor, Windsurf, QClaw, CoPaw, Heuristic
 
+#### Environment Detection (v6.2)
+- **New:** `lib/env_detector.py` — AI Agent 环境检测模块
+- **Detection:** 自动检测当前 AI Agent 平台 (OpenClaw, Claude Code, Cursor, etc.)
+- **LLM Config:** 获取 LLM 配置 (API Key, Endpoint, Model)
+- **Connection Check:** 测试 LLM 是否可以正常调用
+- **CLI Options:**
+  - `--check-env-only`: 仅检测环境，不执行扫描
+  - `--no-env-check`: 跳过环境检测
+- **Auto-fallback:** LLM 连接异常时自动降级到启发式审查
+
 ### 📊 Enhanced Reporting
 
 #### Layered Output
