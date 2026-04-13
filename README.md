@@ -197,9 +197,7 @@ python3 lib/scanner.py --mode batch --platform auto
 
 ### Configuration
 
-**Zero-config mode:** The scanner auto-discovers LLM Provider from `~/.openclaw/openclaw.json`. No manual setup needed.
-
-For custom providers:
+Static scanning requires no configuration. For external LLM integration when needed:
 ```bash
 export OPENAI_BASE_URL="https://your-provider.com/v1/chat/completions"
 export OPENAI_API_KEY="your-api-key"

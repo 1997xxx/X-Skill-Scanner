@@ -149,7 +149,7 @@ python3 ~/.openclaw/skills/x-skill-scanner/scripts/scan_skill.sh <skill-path> --
 
 1. 【检测】识别技能来源（本地路径 / URL / 平台市场）
 2. 【扫描】执行标准化扫描流程（12层防御）
-3. 【审计】调用二次语义审计（通过 LLM）
+3. 【审计】调用二次语义审计（通过 Skill Prompt）
 4. 【报告】生成安全评估报告
 5. 【建议】给出安装建议（可安装 / 需审查 / 阻止安装）
 ```
@@ -196,7 +196,7 @@ python3 ~/.openclaw/skills/x-skill-scanner/scripts/scan_skill.sh <skill-path> --
 │         │                                                        │
 │         ▼                                                        │
 │  ┌──────────────┐                                               │
-│  │ Step 3: 审计  │ ─── 二次语义审计 (LLM via Skill Prompt)       │
+│  │ Step 3: 审计  │ ─── 二次语义审计 (Skill Prompt)              │
 │  │  (语义分析)   │    • 误报过滤                                 │
 │  │              │    • 意图分析                                  │
 │  │              │    • 风险确认                                  │
@@ -257,7 +257,7 @@ python3 ~/.openclaw/skills/x-skill-scanner/scripts/scan_skill.sh <skill-path> --
 
 ### 工具 2: semantic_review
 
-**用途：** 二次语义审计（通过 LLM）
+**用途：** 二次语义审计（通过 Skill Prompt）
 
 **参数：**
 - `scan_results` - 扫描结果 JSON
@@ -404,17 +404,17 @@ python3 ~/.openclaw/skills/x-skill-scanner/scripts/scan_skill.sh <skill-path> --
 
 ### 平台特定行为
 
-| 平台 | 扫描触发方式 | LLM 语义审计 | 安装钩子 |
-|------|-------------|-------------|---------|
-| OpenClaw | AGENT.md 语义触发 | 使用 openclaw.json 配置 | pre_install_scan |
-| Claude Code | 配置文件触发 | 使用 Claude API | 需手动配置 |
-| Cursor | 配置文件触发 | 使用 Cursor 配置 | 需手动配置 |
-| Windsurf | 配置文件触发 | 使用 Windsurf 配置 | 需手动配置 |
-| QClaw | 配置文件触发 | 使用 QClaw 配置 | 需手动配置 |
+| 平台 | 扫描触发方式 | 语义审计 | 安装钩子 |
+|------|-------------|---------|---------|
+| OpenClaw | AGENT.md 语义触发 | Skill Prompt | pre_install_scan |
+| Claude Code | 配置文件触发 | Skill Prompt | 需手动配置 |
+| Cursor | 配置文件触发 | Skill Prompt | 需手动配置 |
+| Windsurf | 配置文件触发 | Skill Prompt | 需手动配置 |
+| QClaw | 配置文件触发 | Skill Prompt | 需手动配置 |
 
 ### 自动检测
 
-系统会自动检测当前运行的 AI Agent 平台，并使用相应的 LLM 配置进行二次语义审计。
+系统会自动检测当前运行的 AI Agent 平台，语义审计通过 Skill Prompt 实现，无需 LLM API。
 在 OpenClaw 环境下，会自动注入 AGENT.md 钩子实现安装前自动扫描。
 
 ---

@@ -197,9 +197,7 @@ python3 lib/scanner.py --mode batch --platform auto
 
 ### 配置
 
-**零配置模式：** 扫描器自动从 `~/.openclaw/openclaw.json` 发现 LLM Provider，无需手动设置。
-
-如需自定义 Provider：
+静态扫描无需配置。如需外部 LLM 集成：
 ```bash
 export OPENAI_BASE_URL="https://your-provider.com/v1/chat/completions"
 export OPENAI_API_KEY="your-api-key"

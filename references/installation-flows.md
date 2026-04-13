@@ -149,14 +149,9 @@ python3 ~/.openclaw/skills/x-skill-scanner/lib/self_check.py
 
 ## 配置
 
-### 零配置模式
+静态扫描无需配置。语义分析层通过 Skill Prompt 实现，无需 LLM API。
 
-扫描器自动从 `~/.openclaw/openclaw.json` 发现 LLM Provider 配置，无需手动设置。
-
-### 自定义 Provider
-
-如需自定义 LLM Provider：
-
+如需外部 LLM 集成：
 ```bash
 export OPENAI_BASE_URL="https://your-provider.com/v1/chat/completions"
 export OPENAI_API_KEY="your-api-key"
