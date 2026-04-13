@@ -1,6 +1,6 @@
 ---
 name: x-skill-scanner
-version: 7.1.1
+version: 7.2.0
 author: 吸音
 license: MIT
 description: >
@@ -115,7 +115,7 @@ meta
   {"openclaw":{"emoji":"🛡️","requires":{"bins":["python3","python"]},"primaryEnv":"XSS_SCAN_PATH","skillKey":"x-skill-scanner"}}
 ---
 
-# X Skill Scanner v7.1.1
+# X Skill Scanner v7.2
 
 **纯 Skill 实现的 AI Agent 技能安全扫描器** — 标准化扫描流程 + 二次语义审计 + 自动安装触发
 
@@ -131,43 +131,19 @@ meta
 
 ---
 
-## 🚀 快速开始
+## 🚀 Skill 模式
 
-### 方式一：自动触发（推荐）
-
-当使用 OpenClaw 或其他支持的 AI Agent 安装技能时，扫描会自动触发：
-
-```bash
-# 安装技能 - 自动触发安全扫描
-claw install <skill-name>
-# 或
-openclaw skill add <skill-url>
-```
-
-### 方式二：手动扫描
-
-```bash
-# 扫描本地技能
-python3 ~/.openclaw/skills/x-skill-scanner/scripts/scan_skill.sh <skill-path>
-
-# 扫描远程技能
-python3 ~/.openclaw/skills/x-skill-scanner/scripts/scan_skill.sh --url <github-url>
-
-# 快速模式（跳过深度扫描）
-python3 ~/.openclaw/skills/x-skill-scanner/scripts/scan_skill.sh <skill-path> --quick
-```
-
-### 方式三：Skill 模式（纯 Skill 工作流）
+当用户请求安装、下载、添加、获取技能时，执行以下工作流：
 
 ```
-当用户请求安装技能时，执行以下 Skill 工作流：
-
 1. 【检测】识别技能来源（本地路径 / URL / 平台市场）
 2. 【扫描】执行标准化扫描流程（12层防御）
 3. 【审计】调用二次语义审计（通过 Skill Prompt）
 4. 【报告】生成安全评估报告
 5. 【建议】给出安装建议（可安装 / 需审查 / 阻止安装）
 ```
+
+**自动触发：** 当用户以任何方式表达安装/下载/添加/获取技能的意图时，必须先扫描再安装。
 
 ---
 
@@ -412,9 +388,7 @@ python3 ~/.openclaw/skills/x-skill-scanner/scripts/scan_skill.sh <skill-path> --
 **安装技能前必须扫描，不可绕过：**
 
 1. **立即识别** — 检测到安装意图后，首先确定技能来源路径
-2. **选择扫描模式：**
-   - **快速模式**（默认）：`--quick`
-   - **完整模式**：技能包含外部脚本引用、网络请求、安装钩子时
+2. **执行扫描** — 使用 12 层防御管线进行全面扫描
 3. **展示结果并给出明确建议**
 4. **仅在扫描通过后**，才执行实际安装命令
 
@@ -515,11 +489,11 @@ x-skill-scanner/
 ## 🔧 CLI 命令参考
 
 ```bash
-# 完整扫描（12层防御）
+# 扫描本地技能
 python3 scripts/scan_skill.sh <skill-path>
 
-# 快速模式（跳过深度扫描）
-python3 scripts/scan_skill.sh <skill-path> --quick
+# 扫描远程技能
+python3 scripts/scan_skill.sh --url <github-url>
 
 # JSON 输出
 python3 scripts/scan_skill.sh <skill-path> --json
@@ -554,4 +528,4 @@ python3 scripts/scan_skill.sh --mode batch --platform openclaw
 
 ---
 
-*版本：v7.1.1 | 最后更新：2026-04-13*
+*版本：v7.2.0 | 最后更新：2026-04-13*
