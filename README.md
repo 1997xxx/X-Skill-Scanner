@@ -38,7 +38,7 @@ X Skill Scanner is not a simple regex-matching tool. It builds **12 independent 
 - **Semantic Understanding** — Multi-agent intent analysis via OpenClaw sessions_spawn, identifying hidden threats invisible to the naked eye
 - **Correlation Analysis** — Cross-engine attack chain detection, discovering multi-stage combined attacks
 
-**Zero configuration required.** The scanner auto-discovers your OpenClaw LLM Provider configuration — no environment variables needed.
+**Ready to use.** Static scanning requires no configuration; semantic analysis layer (Layer 8) auto-discovers OpenClaw LLM Provider when available.
 
 ### 2️⃣ Intelligent Deobfuscation
 
