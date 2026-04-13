@@ -11,55 +11,6 @@
 
 ---
 
-## 🆕 What's New in v6.1
-
-**New Features (2026-04-03):**
-
-### 📊 Mode A - Batch Scanning
-Scan all skills installed on a platform with one command, quickly identifying high-risk skills.
-
-```bash
-# Batch scan all OpenClaw platform skills
-python3 lib/scanner.py --mode batch --platform openclaw
-
-# Summary only (no detailed expansion)
-python3 lib/scanner.py --mode batch --platform openclaw --summary-only
-```
-
-### 🌍 Multi-Platform Support - 22 Agent Platforms
-Expanded from 7 to **22 platforms**, covering IDEs, enterprise, and open-source frameworks.
-
-| Category | Platforms |
-|----------|-----------|
-| **Mainstream** | openclaw, codebuddy, cursor, windsurf, claude, qclaw, workbuddy |
-| **IDE AI** | vscode, jetbrains |
-| **China Platforms** | tencent-coding, aliyun-lingma, baidu-comate |
-| **Open Source** | langchain, auto-gpt, crewai |
-| **Enterprise** | gitlab-duo, github-copilot |
-
-### 🈺 Complete i18n Support
-Chinese/English report support with automatic language detection and silent switching.
-
-```bash
-python3 lib/scanner.py -t ./my-skill/ --lang en  # English report
-python3 lib/scanner.py -t ./my-skill/ --lang zh  # 中文报告
-```
-
-### 🧪 Test Coverage
-New `tests/test_platform_discovery.py` - **21 unit tests** with 100% coverage.
-
-```bash
-python3 -m pytest tests/test_platform_discovery.py -v
-# ✅ 21 passed in 0.41s
-```
-
-### 📝 User-Friendly Reports
-- Plain language risk descriptions ("Execute hidden malicious commands" vs "Base64 decode then execute")
-- Clear installation recommendations (🟢 Safe / 🟡 Caution / 🔴 Do Not Install)
-- Mandatory footer for brand consistency
-
----
-
 ## 🚨 Why This Tool Matters
 
 ClawHub has been infiltrated by **472+ malicious skills** (per SlowMist Security monitoring), including top-downloaded popular skills. Every installed skill is a trust relationship — and that trust deserves scrutiny.
@@ -115,7 +66,19 @@ Trust Score < 40  → Full Mode (12 layers + SubAgent review)  ~60 seconds
 
 Profile dimensions: author credibility, skill type, file structure合理性, red flag markers, etc.
 
-### 4️⃣ SubAgent-Based Review — Cross-Platform, Zero API Config
+### 4️⃣ Multi-Platform Support
+
+Automatic platform detection before scanning, supporting:
+
+| Category | Platforms |
+|----------|-----------|
+| **Mainstream** | openclaw, codebuddy, cursor, windsurf, claude, qclaw, workbuddy |
+| **IDE AI** | vscode, jetbrains |
+| **China Platforms** | tencent-coding, aliyun-lingma, baidu-comate |
+| **Open Source** | langchain, auto-gpt, crewai |
+| **Enterprise** | gitlab-duo, github-copilot |
+
+### 5️⃣ SubAgent-Based Review
 
 The scanner uses OpenClaw's multi-agent communication (`sessions_spawn`) for intelligent false positive filtering:
 
@@ -125,7 +88,15 @@ The scanner uses OpenClaw's multi-agent communication (`sessions_spawn`) for int
 - **Negative example detection** — recognizes "don't do X" documentation patterns vs actual malicious instructions
 - **Batch processing** — groups findings by file for efficient review
 
-### 5️⃣ Cross-Layer Correlation — Detect Multi-Stage Attack Chains
+### 6️⃣ AGENT.md Hook Injection
+
+For OpenClaw platforms, the scanner can automatically inject security rules into `AGENTS.md` on skill installation:
+
+- Semantic-triggered scanning — triggers on any skill install intent
+- Pre-install scan prevents malicious skills from being installed
+- Zero manual intervention required
+
+### 7️⃣ Cross-Layer Correlation
 
 A single engine's finding may be isolated, but combined signals across multiple engines reveal real threats. The scanner identifies **6 attack chain patterns**:
 
@@ -138,7 +109,7 @@ A single engine's finding may be isolated, but combined signals across multiple 
 | Social Engineering | Prompt Injection + Exploitation | Bypass system instructions → dangerous operations |
 | Reverse Shell Chain | Reverse Shell + Network + Obfuscation | Obfuscated reverse shell connection |
 
-### 6️⃣ Multi-Format Reports — Fit Your Workflow
+### 8️⃣ Multi-Format Reports
 
 | Format | Use Case |
 |--------|----------|
@@ -206,9 +177,7 @@ python3 lib/scanner.py -t ./my-skill/ --format html -o report.html
 python3 lib/scanner.py -t ./my-skill/ --format sarif -o results.sarif
 ```
 
-### Mode A: Batch Scanning All Platform Skills
-
-**New in v6.3** — One-command scan of all skills installed on a platform to quickly identify high-risk skills.
+### Batch Scanning All Platform Skills
 
 ```bash
 # Scan all OpenClaw platform skills
@@ -225,60 +194,6 @@ python3 lib/scanner.py --mode batch --platform codebuddy
 # Auto-detect current platform
 python3 lib/scanner.py --mode batch --platform auto
 ```
-
-**Example Output:**
-
-```
-🔍 Mode A: Batch Scanning All Platform Skills
-
-📊 Platform: openclaw
-📦 Found 5 skills
-
-============================================================
-Scanning: self-improving (local)
-============================================================
-Scan Complete - Risk Level: LOW
-
-...
-
-======================================================================
-📊 Batch Scan Summary
-======================================================================
-
-Total Skills Scanned: 5
-
-#    Skill Name                       Source          Detection Result
-----------------------------------------------------------------------
-1    self-improving                 local           ✅ LOW
-2    x-skill-scanner                local           ✅ LOW
-3    linkedin-job                   marketplace     🔴 EXTREME
-4    weather-skill                  local           ✅ SAFE
-5    js-literals-protocol           local           ✅ LOW
-
-======================================================================
-🔴 High-Risk Skill Details
-======================================================================
-
-## linkedin-job
-Risk Level: EXTREME
-Issues Found: 8
-   - [CRITICAL] Malicious Skill Name Match (Known Malicious)
-   - [CRITICAL] Base64 Decode then Execute
-   - [HIGH] Requests User Sensitive Credentials
-...
-```
-
-**Supported Platforms:**
-
-| Platform | Detection Paths |
-|----------|----------------|
-| **openclaw** | `~/.openclaw/skills/`, `~/.openclaw/workspace/skills/` |
-| **codebuddy** | `~/.codebuddy/plugins/`, `~/.codebuddy/plugins/marketplaces/` |
-| **cursor** | `~/.cursor/extensions/`, `./.cursor/skills/` |
-| **windsurf** | `~/.windsurf/skills/`, `./.windsurf/skills/` |
-| **claude** | `~/.claude/skills/`, `./.claude/skills/` |
-| **qclaw** | `~/.qclaw/skills/` |
-| **workbuddy** | `~/.workbuddy/skills/` |
 
 ### Configuration
 
@@ -362,9 +277,8 @@ Verdict: ✅ SAFE TO INSTALL
 ```
 lib/
 ├── scanner.py                 # Main orchestrator (12-layer pipeline)
-├── subagent_reviewer.py       # v6.0: Multi-agent review engine
+├── subagent_reviewer.py       # Multi-agent review engine
 ├── models.py                  # Unified data models (Finding, Severity, etc.)
-├── models_v2.py               # Compatibility shim → models.py
 │
 ├── analyzers/                 # Detection engines
 │   ├── pattern_analyzer.py    # Rule-based pattern matching
@@ -407,48 +321,6 @@ lib/
 | Declarative > Imperative | Tool calls, LLM-friendly | Easy orchestration |
 | Async > Sync | Background execution | High concurrency |
 | Snapshot > Reference | Attachment copying | Independent lifecycles |
-
----
-
-## 🔄 Version History
-
-See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
-
-### Recent Releases
-
-| Version | Date | Highlights |
-|---------|------|-----------|
-| **v7.1.0** | 2026-04-13 | Platform Detection & AGENT.md Hook |
-| v6.1.0 | 2026-04-10 | Multi-platform Agent Adapter, performance optimization |
-| v5.5.0 | 2026-04-02 | Architecture upgrade, adaptive scanning |
-| v5.2.0 | 2026-04-02 | Enhanced deobfuscation |
-| v5.1.0 | 2026-04-01 | Baseline tracking, correlation analysis |
-| v5.0.0 | 2026-03-31 | Initial release |
-
----
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Development Setup
-
-```bash
-# Clone and install dependencies
-git clone https://github.com/1997xxx/X-Skill-Scanner.git
-cd X-Skill-Scanner
-pip install PyYAML
-
-# Run tests
-python3 -m pytest tests/
-
-# Run self-check
-python3 lib/self_check.py
-```
 
 ---
 
