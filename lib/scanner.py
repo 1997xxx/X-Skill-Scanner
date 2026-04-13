@@ -1901,7 +1901,6 @@ def main():
         if args.output:
             output_path = Path(args.output)
             if args.format == 'json':
-                import json
                 output_path.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding='utf-8')
                 _p(f"\n📄 报告已保存：{output_path}")
         
