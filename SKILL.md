@@ -100,7 +100,7 @@ meta
   {"openclaw":{"emoji":"🛡️","requires":{"bins":["python3","python"]},"primaryEnv":"XSS_SCAN_PATH","skillKey":"x-skill-scanner"}}
 ---
 
-# X Skill Scanner v7.0
+# X Skill Scanner v7.1
 
 **纯 Skill 实现的 AI Agent 技能安全扫描器** — 标准化扫描流程 + 二次语义审计 + 自动安装触发
 
@@ -215,7 +215,7 @@ python3 ~/.openclaw/skills/x-skill-scanner/scripts/scan_skill.sh <skill-path> --
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 12层防御管线 (核心扫描能力 - 必须完整保留)
+### 12层防御管线
 
 | 层 | 引擎 | 能力 | 检测类型 |
 |---|------|------|---------|
@@ -227,14 +227,12 @@ python3 ~/.openclaw/skills/x-skill-scanner/scripts/scan_skill.sh <skill-path> --
 | 5 | 📦 依赖检查 | requirements.txt / package.json CVE 匹配 | 供应链 |
 | 6 | 💉 提示词注入 | 25+ 探针 · 系统覆盖 · 角色劫持 · DAN/Jailbreak | 对抗测试 |
 | 7 | 📋 基线追踪 | SHA-256 指纹 · Rug-Pull 检测 · 变更审计 | 变更检测 |
-| 8 | 🧠 语义审计 | 多 Agent 意图分析（高风险文件） | LLM 审查 |
+| 8 | 🧠 语义审计 | 多 Agent 意图分析（高风险文件） | Skill Prompt |
 | 9 | 📊 熵值分析 | Shannon 熵 · CJK 自适应阈值 · 编码载荷 | 统计学 |
 | 10 | 🔧 安装钩子 | postinstall · setup.py · shell RC · cron 注入 | 持久化 |
 | 11 | 🌐 网络画像 | 端点提取 · IP 直连 · 隐蔽通道 · C2 | 网络行为 |
 | 12 | 🔐 凭证窃取 | osascript 钓鱼 · SSH/AWS 密钥 · 浏览器 Cookie · Keychain | 数据外泄 |
 | 🔗 | 跨层关联 | 多引擎攻击链检测 · 关联评分 | 关联分析 |
-
-> ⚠️ **重要**：12层防御管线是核心扫描能力，必须完整保留。LLM 语义审计 (Layer 8) 通过 Skill Prompt 实现，不依赖 Python 代码调用 LLM API。
 
 ---
 
@@ -367,13 +365,13 @@ python3 ~/.openclaw/skills/x-skill-scanner/scripts/scan_skill.sh <skill-path> --
 
 ### 支持的平台
 
-| 平台 | 检测方式 | LLM 配置来源 | Hook 机制 |
-|------|---------|-------------|----------|
-| OpenClaw | 环境变量 + 配置文件 | openclaw.json | AGENT.md 注入 |
-| Claude Code | 环境变量 + keychain | Claude API | 配置文件 |
-| Cursor | 配置文件 | Cursor Settings | 配置文件 |
-| Windsurf | 配置文件 | Windsurf Settings | 配置文件 |
-| QClaw | 环境变量 + 配置文件 | QClaw Config | 配置文件 |
+| 平台 | 检测方式 | Hook 机制 |
+|------|---------|----------|
+| OpenClaw | 环境变量 + 配置文件 | AGENT.md 注入 |
+| Claude Code | 环境变量 + keychain | 配置文件 |
+| Cursor | 配置文件 | 配置文件 |
+| Windsurf | 配置文件 | 配置文件 |
+| QClaw | 环境变量 + 配置文件 | 配置文件 |
 
 ### 平台检测逻辑
 
@@ -436,17 +434,16 @@ x-skill-scanner/
 ├── SKILL.md                    # 核心 Skill 定义
 ├── scripts/
 │   ├── scan_skill.sh          # 扫描入口脚本
-│   ├── quick_scan.py          # 快速静态扫描
-│   ├── deep_scan.py           # 深度扫描引擎
-│   └── report_gen.py          # 报告生成
+│   └── check-skills-change.sh # 技能变更检测
 ├── prompts/
 │   ├── scan_context.md        # 扫描上下文模板
 │   ├── semantic_review.md     # 二次语义审计 Prompt
-│   └── install_advice.md      # 安装建议生成
+│   ├── install_advice.md      # 安装建议生成
+│   └── scan_report.md         # 扫描报告模板
 ├── hooks/
 │   └── pre_install_scan       # 安装前自动触发钩子
 └── config/
-    └── scan_policy.yaml       # 扫描策略配置
+    └── agent_adapters.yaml    # 平台适配器配置
 ```
 
 ---
