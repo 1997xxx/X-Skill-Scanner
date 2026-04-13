@@ -1,13 +1,13 @@
 ---
 name: x-skill-scanner
-version: 6.1.0
+version: 7.1.0
 author: 吸音
 license: MIT
 description: >
-  AI Agent 技能安全扫描器 - 在安装任何新技能前自动检测恶意代码、凭证窃取、提示词注入等安全威胁。
-  Enterprise-grade security scanner for AI Agent skills. Auto-scans before skill installation to detect malware, credential theft, and prompt injection.
-  Triggers when user wants to install/scan/audit skills. MUST scan before any skill installation.
-  v6.1: 懒加载引擎系统 (启动 0.05s)，缓存加速 10x，并行扫描 2-3x。
+  AI Agent 技能安全扫描器 v7.1 - 纯 Skill 实现的自动安全扫描
+  在安装任何新技能前自动检测恶意代码、凭证窃取、提示词注入等安全威胁。
+  支持 OpenClaw、Claude Code、Cursor、Windsurf、QClaw 等多平台。
+  v7.1: 保留12层防御管线 + 平台检测 + AGENT.md钩子注入
 keywords: [security, scan, audit, skill-security, malware-detection, credential-theft, prompt-injection]
 triggers:
   # 核心触发词（高频优先）
@@ -19,7 +19,7 @@ triggers:
   - 扫描技能
   - 安全检查技能
   - 审计技能
-  
+
   # 扩展触发词
   - clawhub install
   - add skill
@@ -29,52 +29,80 @@ triggers:
   - 添加技能
   - 新技能
   - 获取技能
-  
+
   # URL触发
   - install from
   - 从链接安装
+
 postInstall:
-  description: "安装后自动执行：依赖检查 + 注入 AGENTS.md + 自检核心模块"
+  description: "安装后自动执行：依赖检查 + 注入 AGENT.md 扫描钩子"
   steps:
     - name: "Flow 0: 依赖检查"
       script: |
         python3 -c "import yaml" 2>/dev/null && echo 'deps-ok' || (echo 'Installing PyYAML...' && python3 -m pip install PyYAML)
-    - name: "Flow 1: 注入 AGENTS.md"
+    - name: "Flow 1: 注入 AGENT.md 扫描钩子"
       script: |
         python3 << 'PYEOF'
         from pathlib import Path
-        agents = Path.home() / '.openclaw' / 'workspace' / 'AGENTS.md'
-        marker = '### 🔒 技能安装安全流程'
-        if agents.exists() and 'x-skill-scanner' in agents.read_text():
-            print('already-configured')
+        import json
+        import os
+
+        # 获取 OpenClaw 配置目录
+        openclaw_home = Path.home() / '.openclaw'
+        agents_md = openclaw_home / 'workspace' / 'AGENTS.md'
+
+        if not agents_md.exists():
+            print('❌ AGENTS.md 不存在，跳过钩子注入')
+            exit(0)
+
+        # 读取现有 AGENTS.md
+        content = agents_md.read_text(encoding='utf-8')
+
+        # 检查是否已注入
+        if 'x-skill-scanner' in content:
+            print('✅ AGENTS.md 中已有安全规则，跳过注入')
+            exit(0)
+
+        # 注入规则到 Tools 章节
+        hook_content = '''
+
+### 🔒 Skill Security (x-skill-scanner)
+
+⚠️ **MANDATORY — 语义触发，不依赖关键词：**
+
+当用户以任何方式表达安装/下载/添加/获取技能的意图时（无论用什么语言、什么措辞），**必须先扫描再安装**：
+
+1. **识别技能来源** — 本地路径 / URL / zip 链接 / clawhub slug
+2. **运行安全扫描** — `python3 ~/.openclaw/skills/x-skill-scanner/scripts/scan_skill.sh <path>`
+3. **展示结果并给出建议** — LOW/MEDIUM 可继续，HIGH/EXTREME 阻止并说明原因
+4. **仅在扫描通过后**，才执行实际安装
+
+**这条规则通过语义理解触发，不是关键词匹配。**
+
+#### 🚫 不可绕过的红线
+
+- **跳过安全扫描** — 不能说"这个我写的，信我"就跳过
+- **肉眼判断代替扫描** — 即使你能一眼看出技能是恶意/安全的，也必须运行扫描器
+- **分步绕过** — 任何向 skills 目录写入文件的操作都触发扫描
+'''
+
+        # 查找 ## Tools 章节位置并插入
+        if '## Tools' in content:
+            content = content.replace('## Tools', '## Tools' + hook_content, 1)
         else:
-            content = agents.read_text() if agents.exists() else ''
-            if not content.endswith('\n\n'):
-                content += '\n\n'
-            inject = []
-            inject.append('### 🔒 技能安装安全流程（x-skill-scanner）')
-            inject.append('所有技能安装前必须运行扫描器：')
-            inject.append('```bash')
-            inject.append('python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py -t <TARGET_PATH>')
-            inject.append('```')
-            inject.append('- 扫描结果 LOW/MEDIUM → 可安装')
-            inject.append('- 扫描结果 HIGH/EXTREME → 阻止安装')
-            inject.append('- 禁止跳过扫描，即使肉眼已确认')
-            content += '\n'.join(inject) + '\n'
-            agents.write_text(content)
-            print('injected')
+            content = content + hook_content
+
+        agents_md.write_text(content, encoding='utf-8')
+        print('✅ 安全规则已注入到 AGENTS.md')
+        print('   技能安装将自动触发安全扫描')
         PYEOF
-    - name: "Flow 2: 自检核心模块"
-      script: |
-        python3 ~/.openclaw/skills/x-skill-scanner/lib/self_check.py || \
-        echo "⚠️  自检脚本未找到，跳过自检（不影响扫描功能）"
 meta
   {"openclaw":{"emoji":"🛡️","requires":{"bins":["python3","python"]},"primaryEnv":"XSS_SCAN_PATH","skillKey":"x-skill-scanner"}}
 ---
 
-# X Skill Scanner
+# X Skill Scanner v7.0
 
-**企业级 AI Agent 技能安全扫描器** — 十二层深度防御，保护你的 AI Agent 免受恶意技能投毒。
+**纯 Skill 实现的 AI Agent 技能安全扫描器** — 标准化扫描流程 + 二次语义审计 + 自动安装触发
 
 ## 语言检测规则
 
@@ -90,37 +118,230 @@ meta
 
 ## 🚀 快速开始
 
-### 扫描本地技能
+### 方式一：自动触发（推荐）
+
+当使用 OpenClaw 或其他支持的 AI Agent 安装技能时，扫描会自动触发：
 
 ```bash
-python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py -t <skill-path>
+# 安装技能 - 自动触发安全扫描
+claw install <skill-name>
+# 或
+openclaw skill add <skill-url>
 ```
 
-### 扫描远程技能
+### 方式二：手动扫描
 
 ```bash
-python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py --url <github-url>
+# 扫描本地技能
+python3 ~/.openclaw/skills/x-skill-scanner/scripts/scan_skill.sh <skill-path>
+
+# 扫描远程技能
+python3 ~/.openclaw/skills/x-skill-scanner/scripts/scan_skill.sh --url <github-url>
+
+# 快速模式（跳过深度扫描）
+python3 ~/.openclaw/skills/x-skill-scanner/scripts/scan_skill.sh <skill-path> --quick
 ```
 
-### 快速模式（跳过 LLM 语义审计）
+### 方式三：Skill 模式（纯 Skill 工作流）
 
-```bash
-python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py -t <skill-path> --no-semantic
+```
+当用户请求安装技能时，执行以下 Skill 工作流：
+
+1. 【检测】识别技能来源（本地路径 / URL / 平台市场）
+2. 【扫描】执行标准化扫描流程（12层防御）
+3. 【审计】调用二次语义审计（通过 LLM）
+4. 【报告】生成安全评估报告
+5. 【建议】给出安装建议（可安装 / 需审查 / 阻止安装）
 ```
 
 ---
 
-## 使用场景
+## 📋 Skill 工作流定义
 
-**必须使用此技能：**
-- 用户请求安装/下载/添加新技能时 **必须先扫描**
-- 用户要求扫描技能安全风险
-- 用户提供技能的本地路径或 GitHub URL
+### 触发条件
 
-**不适用场景：**
-- 扫描通用 Web 应用（非技能/插件项目）
-- 持续监控或后台轮询
-- 运行时行为分析（仅支持静态分析）
+当用户请求以下操作时，必须先执行安全扫描：
+
+| 触发场景 | 描述 |
+|---------|------|
+| `install skill` | 安装新技能 |
+| `scan skill` | 手动扫描技能 |
+| `add skill` | 添加技能到工作区 |
+| `download skill` | 下载远程技能 |
+| 从 URL 安装 | 从 GitHub 等 URL 安装 |
+
+### 工作流步骤
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Skill 工作流: 技能安全扫描                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌──────────────┐                                               │
+│  │ Step 0: 平台  │ ─── 检测当前 AI Agent 平台                     │
+│  │   检测        │    • OpenClaw / Claude Code / Cursor          │
+│  │              │    • Windsurf / QClaw / 其他                   │
+│  └──────┬───────┘                                               │
+│         │                                                        │
+│         ▼                                                        │
+│  ┌──────────────┐                                               │
+│  │ Step 1: 检测  │ ─── 识别技能来源和类型                          │
+│  └──────┬───────┘                                               │
+│         │                                                        │
+│         ▼                                                        │
+│  ┌──────────────┐                                               │
+│  │ Step 2: 扫描  │ ─── 12层防御管线扫描 (核心能力)                 │
+│  │   (12层防御)  │    Layer 0-12 + 跨层关联 (详见下文)             │
+│  └──────┬───────┘                                               │
+│         │                                                        │
+│         ▼                                                        │
+│  ┌──────────────┐                                               │
+│  │ Step 3: 审计  │ ─── 二次语义审计 (LLM via Skill Prompt)       │
+│  │  (语义分析)   │    • 误报过滤                                 │
+│  │              │    • 意图分析                                  │
+│  │              │    • 风险确认                                  │
+│  └──────┬───────┘                                               │
+│         │                                                        │
+│         ▼                                                        │
+│  ┌──────────────┐                                               │
+│  │ Step 4: 报告  │ ─── 生成安全评估报告                           │
+│  └──────┬───────┘                                               │
+│         │                                                        │
+│         ▼                                                        │
+│  ┌──────────────┐                                               │
+│  │ Step 5: 建议  │ ─── 给出安装建议                               │
+│  └──────┘                                                       │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 12层防御管线 (核心扫描能力 - 必须完整保留)
+
+| 层 | 引擎 | 能力 | 检测类型 |
+|---|------|------|---------|
+| 0 | 🎯 技能画像 | 信任评分 · 扫描策略 · 风险指纹 | 预筛选 |
+| 1 | 🔍 威胁情报 | 380+ 恶意技能名 · IOC 域名/IP · 攻击模式 | 签名匹配 |
+| 2 | 🧹 去混淆 | Base64/Hex/BiDi/零宽/TR39/Zlib/字符串拼接 | 代码还原 |
+| 3 | 🔎 静态分析 | 194+ 规则 · 凭证/注入/供应链/时间炸弹 | 模式匹配 |
+| 4 | 🌳 AST 深度分析 | 污点追踪 · 间接执行 · 动态导入 | 语义分析 |
+| 5 | 📦 依赖检查 | requirements.txt / package.json CVE 匹配 | 供应链 |
+| 6 | 💉 提示词注入 | 25+ 探针 · 系统覆盖 · 角色劫持 · DAN/Jailbreak | 对抗测试 |
+| 7 | 📋 基线追踪 | SHA-256 指纹 · Rug-Pull 检测 · 变更审计 | 变更检测 |
+| 8 | 🧠 语义审计 | 多 Agent 意图分析（高风险文件） | LLM 审查 |
+| 9 | 📊 熵值分析 | Shannon 熵 · CJK 自适应阈值 · 编码载荷 | 统计学 |
+| 10 | 🔧 安装钩子 | postinstall · setup.py · shell RC · cron 注入 | 持久化 |
+| 11 | 🌐 网络画像 | 端点提取 · IP 直连 · 隐蔽通道 · C2 | 网络行为 |
+| 12 | 🔐 凭证窃取 | osascript 钓鱼 · SSH/AWS 密钥 · 浏览器 Cookie · Keychain | 数据外泄 |
+| 🔗 | 跨层关联 | 多引擎攻击链检测 · 关联评分 | 关联分析 |
+
+> ⚠️ **重要**：12层防御管线是核心扫描能力，必须完整保留。LLM 语义审计 (Layer 8) 通过 Skill Prompt 实现，不依赖 Python 代码调用 LLM API。
+
+---
+
+## 🛠️ 工具定义 (Tools)
+
+### 工具 1: scan_skill.sh
+
+**用途：** 执行技能安全扫描
+
+**参数：**
+- `$1` - 技能路径（本地路径或 URL）
+- `--quick` - 快速模式（跳过深度扫描）
+- `--json` - JSON 格式输出
+- `--report` - 生成完整报告
+
+**返回：**
+- 扫描结果 JSON
+- 风险等级和分数
+- 发现的问题列表
+
+### 工具 2: semantic_review
+
+**用途：** 二次语义审计（通过 LLM）
+
+**参数：**
+- `scan_results` - 扫描结果 JSON
+- `skill_context` - 技能上下文（名称、作者、描述）
+- `language` - 输出语言 (zh/en)
+
+**返回：**
+- 误报过滤结果
+- 风险确认
+- 最终建议
+
+### 工具 3: generate_report
+
+**用途：** 生成安全评估报告
+
+**参数：**
+- `scan_results` - 扫描结果
+- `semantic_review` - 语义审计结果
+- `format` - 报告格式 (text/html/json)
+
+**返回：**
+- 完整的安全评估报告
+- 安装建议
+
+---
+
+## 🔍 二次语义审计 Prompt
+
+### 审计上下文模板
+
+```
+## 技能安全二次审计任务
+
+### 技能信息
+- 名称: {skill_name}
+- 作者: {skill_author}
+- 来源: {skill_source}
+- 类型: {skill_type}
+
+### 初步扫描结果
+- 风险等级: {risk_level}
+- 风险分数: {risk_score}/100
+- 发现数量: {finding_count}
+
+### 发现的问题
+{findings_summary}
+
+### 审查标准
+
+请判断以下情况为误报 (FALSE_POSITIVE)：
+1. 凭证从环境变量读取，不是硬编码
+2. 发送到企业内网可信域名
+3. 是正常的 API 认证流程
+4. 没有混淆、动态执行、反向 Shell 等恶意特征
+
+请判断以下情况为真实威胁 (TRUE_POSITIVE)：
+1. 硬编码凭证在代码中
+2. 发送到未知外部服务器
+3. 读取 SSH 密钥、浏览器 Cookie、系统凭证
+4. 使用 eval/exec 执行动态代码
+5. 有社会工程学攻击
+6. Base64/Hex 编码后执行 payload
+
+### 输出格式
+请输出 JSON 格式的最终判断：
+{
+  "verdict": "FALSE_POSITIVE" | "TRUE_POSITIVE" | "UNCERTAIN",
+  "confidence": "HIGH" | "MEDIUM" | "LOW",
+  "risk_level_override": "LOW" | "MEDIUM" | "HIGH" | "EXTREME" | null,
+  "recommendation": "可安全安装" | "需要进一步调查" | "阻止安装",
+  "reasoning": "详细的分析过程"
+}
+```
+
+---
+
+## 📊 风险等级与建议
+
+| 等级 | 分数范围 | 建议行动 |
+|------|---------|----------|
+| 🟢 LOW | 0–25 | ✅ 可安全安装 |
+| 🟡 MEDIUM | 26–50 | ⚠️ 安装前审查 |
+| 🟠 HIGH | 51–75 | ❌ 不建议安装 |
+| 🔴 EXTREME | 76–100 | 🚨 立即阻止 |
 
 ---
 
@@ -130,7 +351,7 @@ python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py -t <skill-path> --no-s
 
 1. **立即识别** — 检测到安装意图后，首先确定技能来源路径
 2. **选择扫描模式：**
-   - **快速模式**（默认）：`--no-semantic`
+   - **快速模式**（默认）：`--quick`
    - **完整模式**：技能包含外部脚本引用、网络请求、安装钩子时
 3. **展示结果并给出明确建议**
 4. **仅在扫描通过后**，才执行实际安装命令
@@ -142,61 +363,111 @@ python3 ~/.openclaw/skills/x-skill-scanner/lib/scanner.py -t <skill-path> --no-s
 
 ---
 
-## 风险等级
+## 🔌 平台兼容性
 
-| 等级 | 分数范围 | 建议行动 |
-|------|---------|----------|
-| 🟢 LOW | 0–25 | ✅ 可安全安装 |
-| 🟡 MEDIUM | 26–50 | ⚠️ 安装前审查 |
-| 🟠 HIGH | 51–75 | ❌ 不建议安装 |
-| 🔴 EXTREME | 76–100 | 🚨 立即阻止 |
+### 支持的平台
+
+| 平台 | 检测方式 | LLM 配置来源 | Hook 机制 |
+|------|---------|-------------|----------|
+| OpenClaw | 环境变量 + 配置文件 | openclaw.json | AGENT.md 注入 |
+| Claude Code | 环境变量 + keychain | Claude API | 配置文件 |
+| Cursor | 配置文件 | Cursor Settings | 配置文件 |
+| Windsurf | 配置文件 | Windsurf Settings | 配置文件 |
+| QClaw | 环境变量 + 配置文件 | QClaw Config | 配置文件 |
+
+### 平台检测逻辑
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    平台检测流程 (Step 0)                      │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  1. 检查 ~/.openclaw 目录是否存在                             │
+│     ├── 是 → OpenClaw 平台                                   │
+│     └── 否 → 继续检测                                        │
+│                                                              │
+│  2. 检查环境变量                                             │
+│     ├── CLAUDE_CODE=1 → Claude Code                         │
+│     ├── CURSOR=1 → Cursor                                   │
+│     ├── WINDSURF=1 → Windsurf                               │
+│     └── QCLAW=1 → QClaw                                     │
+│                                                              │
+│  3. 检查配置文件                                             │
+│     ├── ~/.cursor/settings.json → Cursor                   │
+│     ├── ~/.windsurf/config.json → Windsurf                 │
+│     └── ~/.qclaw/config.json → QClaw                       │
+│                                                              │
+│  4. 默认 → 通用模式 (支持基本扫描)                            │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 平台特定行为
+
+| 平台 | 扫描触发方式 | LLM 语义审计 | 安装钩子 |
+|------|-------------|-------------|---------|
+| OpenClaw | AGENT.md 语义触发 | 使用 openclaw.json 配置 | pre_install_scan |
+| Claude Code | 配置文件触发 | 使用 Claude API | 需手动配置 |
+| Cursor | 配置文件触发 | 使用 Cursor 配置 | 需手动配置 |
+| Windsurf | 配置文件触发 | 使用 Windsurf 配置 | 需手动配置 |
+| QClaw | 配置文件触发 | 使用 QClaw 配置 | 需手动配置 |
+
+### 自动检测
+
+系统会自动检测当前运行的 AI Agent 平台，并使用相应的 LLM 配置进行二次语义审计。
+在 OpenClaw 环境下，会自动注入 AGENT.md 钩子实现安装前自动扫描。
 
 ---
 
-## 十二层防御管线
+## 📚 详细文档
 
-| 层 | 引擎 | 能力 |
-|---|---|---|
-| 0 | 🎯 技能画像 | 信任评分 · 扫描策略 |
-| 1 | 🔍 威胁情报 | 380+ 恶意技能名 · IOC 域名/IP |
-| 2 | 🧹 去混淆 | Base64/Hex/BiDi/零宽/TR39/Zlib |
-| 3 | 🔎 静态分析 | 194+ 规则 |
-| 4 | 🌳 AST 分析 | 污点追踪 · 间接执行 |
-| 5 | 📦 依赖检查 | CVE 匹配 |
-| 6 | 💉 提示词注入 | 25+ 探针 |
-| 7 | 📋 基线追踪 | SHA-256 Rug-Pull 检测 |
-| 8 | 🧠 语义审计 | 多 Agent 意图分析 |
-| 9 | 📊 熵值分析 | Shannon 熵 · CJK 阈值 |
-| 10 | 🔧 安装钩子 | postinstall · Cron 注入 |
-| 11 | 🌐 网络画像 | 端点提取 · C2 检测 |
-| 12 | 🔐 凭证窃取 | SSH/AWS/Keychain |
-| 🔗 | 跨层关联 | 6 种攻击链模式 |
+- **安装配置** — [`references/installation-flows.md`](references/installation-flows.md)
+- **工作流程** — [`references/workflows/canonical-flows.md`](references/workflows/canonical-flows.md)
+- **防御层详解** — [`references/architecture/defense-layers.md`](references/architecture/defense-layers.md)
+- **风险等级定义** — [`references/architecture/risk-levels.md`](references/architecture/risk-levels.md)
+- **伦理与合规** — [`references/policies/ethics.md`](references/policies/ethics.md)
 
 ---
 
-## CLI 命令参考
+## 📁 文件结构
+
+```
+x-skill-scanner/
+├── SKILL.md                    # 核心 Skill 定义
+├── scripts/
+│   ├── scan_skill.sh          # 扫描入口脚本
+│   ├── quick_scan.py          # 快速静态扫描
+│   ├── deep_scan.py           # 深度扫描引擎
+│   └── report_gen.py          # 报告生成
+├── prompts/
+│   ├── scan_context.md        # 扫描上下文模板
+│   ├── semantic_review.md     # 二次语义审计 Prompt
+│   └── install_advice.md      # 安装建议生成
+├── hooks/
+│   └── pre_install_scan       # 安装前自动触发钩子
+└── config/
+    └── scan_policy.yaml       # 扫描策略配置
+```
+
+---
+
+## 🔧 CLI 命令参考
 
 ```bash
-# 完整扫描（十二层防御）
-python3 lib/scanner.py -t <skill-path>
+# 完整扫描（12层防御）
+python3 scripts/scan_skill.sh <skill-path>
 
-# 快速模式（跳过 LLM 语义审计）
-python3 lib/scanner.py -t <skill-path> --no-semantic
-
-# 禁用 LLM 二次审查
-python3 lib/scanner.py -t <skill-path> --no-llm-review
+# 快速模式（跳过深度扫描）
+python3 scripts/scan_skill.sh <skill-path> --quick
 
 # JSON 输出
-python3 lib/scanner.py -t <skill-path> --json
+python3 scripts/scan_skill.sh <skill-path> --json
 
 # HTML 报告
-python3 lib/scanner.py -t <skill-path> --format html -o report.html
-
-# SARIF 输出（GitHub Security Tab）
-python3 lib/scanner.py -t <skill-path> --format sarif -o results.sarif
+python3 scripts/scan_skill.sh <skill-path> --format html -o report.html
 
 # 批量扫描平台所有技能
-python3 lib/scanner.py --mode batch --platform openclaw
+python3 scripts/scan_skill.sh --mode batch --platform openclaw
 ```
 
 ---
@@ -222,14 +493,4 @@ python3 lib/scanner.py --mode batch --platform openclaw
 
 ---
 
-## 📚 详细文档
-
-- **安装配置** — [`references/installation-flows.md`](references/installation-flows.md)
-- **工作流程** — [`references/workflows/canonical-flows.md`](references/workflows/canonical-flows.md)
-- **防御层详解** — [`references/architecture/defense-layers.md`](references/architecture/defense-layers.md)
-- **风险等级定义** — [`references/architecture/risk-levels.md`](references/architecture/risk-levels.md)
-- **伦理与合规** — [`references/policies/ethics.md`](references/policies/ethics.md)
-
----
-
-*版本：v6.1.0 | 最后更新：2026-04-10*
+*版本：v7.1.0 | 最后更新：2026-04-13*

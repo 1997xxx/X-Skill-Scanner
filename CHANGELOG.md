@@ -5,6 +5,45 @@ All notable changes to X-Skill-Scanner will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.1.0] - 2026-04-13
+
+### 🎯 Platform Detection & AGENT.md Hook
+
+#### Core Changes
+- **Preserved:** 12-layer defense pipeline (core scanning capability)
+- **New:** Platform detection (Step 0: OpenClaw/Claude Code/Cursor/Windsurf/QClaw)
+- **New:** AGENT.md hook injection mechanism (replaces standalone hook script)
+- **New:** LLM semantic audit via Skill Prompt (no Python LLM API calls)
+- **Updated:** scan_skill.sh with platform auto-detection
+
+#### Platform Detection Logic
+1. Check ~/.openclaw directory → OpenClaw
+2. Check environment variables (CLAUDE_CODE, CURSOR, WINDSURF, QCLAW)
+3. Check config files (~/.cursor/settings.json, ~/.windsurf/config.json, ~/.qclaw/config.json)
+4. Default → unknown
+
+#### Files Changed
+- `SKILL.md`: Added 12-layer defense pipeline table, platform detection flow
+- `postInstall`: Inject AGENT.md rules instead of creating standalone hook
+- `scripts/scan_skill.sh`: Added detect_platform() function
+- `references/installation-flows.md`: Updated AGENT.md injection instructions
+
+---
+
+## [7.0.0] - 2026-04-13
+
+### 🚀 Pure Skill Architecture
+
+#### Core Changes
+- Pure Skill architecture - standardized scanning workflow
+- Secondary semantic audit prompt templated
+- Pre-install automatic trigger mechanism (pre_install hook)
+- Cross-platform compatibility (OpenClaw/Claude Code/Cursor/Windsurf/QClaw)
+- Standardized tool definitions (Tools)
+- Report templated
+
+---
+
 ## [6.1.0] - 2026-04-10
 
 ### 🚀 Performance Optimization

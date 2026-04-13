@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-v6.1.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v7.1.0-blue.svg)](CHANGELOG.md)
 [![GitHub Stars](https://img.shields.io/github/stars/1997xxx/X-Skill-Scanner?style=social)](https://github.com/1997xxx/X-Skill-Scanner)
 
 📖 [中文文档 →](README_CH.md)
@@ -329,7 +329,7 @@ python3 lib/scanner.py --help
 ## 📊 Sample Output
 
 ```
-🔍 X Skill Scanner v6.1.0
+🔍 X Skill Scanner v7.1.0
 Scanning: ./my-skill/
 
 🎯 Step 0/7: Skill Profiling...
@@ -418,7 +418,8 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 | Version | Date | Highlights |
 |---------|------|-----------|
-| **v6.1.0** | 2026-04-10 | Multi-platform Agent Adapter, performance optimization |
+| **v7.1.0** | 2026-04-13 | Platform Detection & AGENT.md Hook |
+| v6.1.0 | 2026-04-10 | Multi-platform Agent Adapter, performance optimization |
 | v5.5.0 | 2026-04-02 | Architecture upgrade, adaptive scanning |
 | v5.2.0 | 2026-04-02 | Enhanced deobfuscation |
 | v5.1.0 | 2026-04-01 | Baseline tracking, correlation analysis |
@@ -465,4 +466,4 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 
 ---
 
-*Version: v6.1.0 | Updated: 2026-04-10*
+*Version: v7.1.0 | Updated: 2026-04-13*

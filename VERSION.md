@@ -1,6 +1,61 @@
 # X-Skill-Scanner Version History
 
-## Current Version: v6.1.0 (2026-04-10)
+## Current Version: v7.1.0 (2026-04-13)
+
+### v7.1.0 - Platform Detection & AGENT.md Hook
+
+**Release Date:** 2026-04-13
+
+**Major Changes:**
+- 保留完整 12 层防御管线（核心扫描能力）
+- 新增平台检测功能（Step 0: 检测 OpenClaw/Claude Code/Cursor/Windsurf/QClaw）
+- AGENT.md 钩子注入机制替代独立 hook 脚本
+- LLM 语义审计通过 Skill Prompt 实现（不依赖 Python 代码调用 LLM API）
+- scan_skill.sh 新增平台自动检测
+
+**Changes:**
+- SKILL.md: 添加 12 层防御管线详细表格，添加平台检测流程图
+- postInstall: 改为注入 AGENT.md 规则而非创建独立 hook 脚本
+- scripts/scan_skill.sh: 新增 detect_platform() 函数
+- references/installation-flows.md: 更新 AGENT.md 注入说明
+
+**平台检测逻辑:**
+1. 检查 ~/.openclaw 目录 → OpenClaw
+2. 检查环境变量 (CLAUDE_CODE, CURSOR, WINDSURF, QCLAW)
+3. 检查配置文件 (~/.cursor/settings.json, ~/.windsurf/config.json, ~/.qclaw/config.json)
+4. 默认 → unknown
+
+---
+
+### v7.0.0 - Pure Skill Architecture
+
+**Release Date:** 2026-04-13
+
+**Major Changes:**
+- 纯 Skill 架构 - 标准化扫描流程
+- 二次语义审计 Prompt 模板化
+- 安装前自动触发机制 (pre_install hook)
+- 跨平台兼容 (OpenClaw/Claude Code/Cursor/Windsurf/QClaw)
+- 标准化工具定义 (Tools)
+- 报告模板化
+
+**New Files:**
+- `scripts/scan_skill.sh` - 扫描入口脚本
+- `prompts/semantic_review.md` - 二次语义审计 Prompt
+- `prompts/scan_report.md` - 报告生成模板
+- `prompts/install_advice.md` - 安装建议生成模板
+- `prompts/scan_context.md` - 扫描上下文模板
+- `hooks/pre_install_scan` - 安装前自动触发钩子
+
+**Architecture:**
+- Skill 工作流标准化 (检测 → 扫描 → 审计 → 报告 → 建议)
+- 工具定义标准化 (scan_skill.sh, semantic_review, generate_report)
+- Prompt 模板化 (支持多语言)
+- 自动安装触发 (postInstall hook)
+
+---
+
+## v6.1.0 (2026-04-10)
 
 ### v6.1.0 - Performance Optimization & Enhanced Testing
 

@@ -57,7 +57,7 @@ $PYTHON_CMD -c "import yaml" 2>/dev/null && echo "deps-ok" || echo "deps-missing
 
 ---
 
-### Flow 1: 安装后自动注入 AGENTS.md
+### Flow 1: 安装后自动注入 AGENTS.md (v7.1 新机制)
 
 ⚠️ **当用户安装此技能时，必须自动执行以下配置步骤：**
 
@@ -82,7 +82,7 @@ $PYTHON_CMD -c "import yaml" 2>/dev/null && echo "deps-ok" || echo "deps-missing
    ```
 
 2. **如果未配置，自动注入到 AGENTS.md**
-   
+
    在 `## Tools` 章节下（或文件末尾）添加以下内容：
 
    ````markdown
@@ -92,13 +92,15 @@ $PYTHON_CMD -c "import yaml" 2>/dev/null && echo "deps-ok" || echo "deps-missing
 
    当用户以任何方式表达安装/下载/添加/获取技能的意图时（无论用什么语言、什么措辞），**必须先扫描再安装**：
 
-   1. **识别技能来源** — 本地路径 / URL / zip 链接 / clawhub slug
-   2. **运行安全扫描** — `python3 <skill-dir>/lib/scanner.py -t <path>`（Windows: `python`）
-      - `<skill-dir>` 是技能安装路径，通常为 `~/.openclaw/skills/x-skill-scanner/`（macOS/Linux）或 `%USERPROFILE%\.openclaw\skills\x-skill-scanner\`（Windows）
-      - 使用 `--no-semantic` 加速（跳过 LLM 语义审计）
-      - 如果技能包含外部脚本引用、网络请求、安装钩子 → 去掉 `--no-semantic` 做完整扫描
-   3. **展示结果并给出建议** — LOW/MEDIUM 可继续，HIGH/EXTREME 阻止并说明原因
-   4. **仅在扫描通过后**，才执行实际安装
+   1. **平台检测** — 首先检测当前 AI Agent 平台（OpenClaw/Claude Code/Cursor/Windsurf/QClaw）
+   2. **识别技能来源** — 本地路径 / URL / zip 链接 / clawhub slug
+   3. **运行安全扫描** — `python3 ~/.openclaw/skills/x-skill-scanner/scripts/scan_skill.sh <path>`
+      - 使用 `--quick` 加速（跳过 LLM 语义审计）
+      - 如果技能包含外部脚本引用、网络请求、安装钩子 → 做完整扫描
+   4. **展示结果并给出建议** — LOW/MEDIUM 可继续，HIGH/EXTREME 阻止并说明原因
+   5. **仅在扫描通过后**，才执行实际安装
+
+   **12层防御管线是核心扫描能力，必须完整保留。LLM 语义审计通过 Skill Prompt 实现。**
 
    **这条规则通过语义理解触发，不是关键词匹配。** 只要你能判断用户想装技能，就执行上述流程。不要问"要不要先扫描？"——直接扫！
 
@@ -116,7 +118,7 @@ $PYTHON_CMD -c "import yaml" 2>/dev/null && echo "deps-ok" || echo "deps-missing
    每次新会话启动时，自动检测是否有新增或变更的技能：
    ```bash
    # macOS/Linux
-   bash ~/.openclaw/skills/clawhub/scripts/check-skills-change.sh
+   bash ~/.openclaw/skills/x-skill-scanner/scripts/check-skills-change.sh
    # Windows: 使用 PowerShell 替代方案或直接跳过（变更检测由扫描器自身兜底）
    ```
    如果发现新技能且未被扫描过 → 立即扫描并报告。
@@ -214,4 +216,4 @@ ls -la ~/.openclaw/skills/x-skill-scanner/lib/scanner.py
 
 ---
 
-*版本：v6.1.0 | 最后更新：2026-04-10*
+*版本：v7.1.0 | 最后更新：2026-04-13*
