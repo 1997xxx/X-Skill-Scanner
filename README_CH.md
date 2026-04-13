@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-v7.1.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v7.1.1-blue.svg)](CHANGELOG.md)
 [![GitHub Stars](https://img.shields.io/github/stars/1997xxx/X-Skill-Scanner?style=social)](https://github.com/1997xxx/X-Skill-Scanner)
 
 📖 [English README →](README.md)
@@ -299,4 +299,4 @@ MIT License
 
 ---
 
-*版本：v7.1.0 | 更新日期：2026-04-13*
+*版本：v7.1.1 | 更新日期：2026-04-13*

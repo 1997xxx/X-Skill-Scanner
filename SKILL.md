@@ -1,38 +1,53 @@
 ---
 name: x-skill-scanner
-version: 7.1.0
+version: 7.1.1
 author: 吸音
 license: MIT
 description: >
-  AI Agent 技能安全扫描器 v7.1 - 纯 Skill 实现的自动安全扫描
-  在安装任何新技能前自动检测恶意代码、凭证窃取、提示词注入等安全威胁。
-  支持 OpenClaw、Claude Code、Cursor、Windsurf、QClaw 等多平台。
-  v7.1: 保留12层防御管线 + 平台检测 + AGENT.md钩子注入
-keywords: [security, scan, audit, skill-security, malware-detection, credential-theft, prompt-injection]
+  AI Agent 技能安全扫描器 - 在安装、下载、添加、获取任何新技能前自动扫描检测恶意代码、凭证窃取、提示词注入等安全威胁。
+  支持扫描本地技能、从 GitHub/URL 安装技能、审计技能安全性、检查下载的技能是否安全。
+  支持 OpenClaw、Claude Code、Cursor、Windsurf、QClaw 等多平台。纯 Skill 实现，静态扫描无需配置。
+keywords: [security, scan, audit, skill-security, malware-detection, credential-theft, prompt-injection, install-skill, download-skill]
 triggers:
-  # 核心触发词（高频优先）
+  # 核心触发词 - 安装相关
   - install skill
-  - scan skill
-  - audit skill
-  - check skill security
   - 安装技能
-  - 扫描技能
-  - 安全检查技能
-  - 审计技能
-
-  # 扩展触发词
-  - clawhub install
-  - add skill
-  - download skill
-  - new skill
-  - 下载技能
-  - 添加技能
-  - 新技能
-  - 获取技能
-
-  # URL触发
-  - install from
+  - 安装这个技能
+  - 下载并安装
+  - 从 GitHub 安装
   - 从链接安装
+  - install from url
+  - install from github
+
+  # 核心触发词 - 扫描审计相关
+  - scan skill
+  - 扫描技能
+  - 审计技能
+  - audit skill
+  - 检查技能安全
+  - check skill security
+  - 检查安全性
+  - 扫描一下
+  - 安全吗
+
+  # 核心触发词 - 添加/获取相关
+  - add skill
+  - 添加技能
+  - download skill
+  - 下载技能
+  - 获取技能
+  - new skill
+  - clawhub install
+
+  # 语义触发 - 意图识别
+  - 这个技能安全吗
+  - 帮我看看这个技能
+  - 怎么安装技能
+  - 技能怎么安装
+  - 有用的技能
+  - 安装到我的
+  - add to my workspace
+  - from url to my
 
 postInstall:
   description: "安装后自动执行：依赖检查 + 注入 AGENT.md 扫描钩子"
@@ -100,7 +115,7 @@ meta
   {"openclaw":{"emoji":"🛡️","requires":{"bins":["python3","python"]},"primaryEnv":"XSS_SCAN_PATH","skillKey":"x-skill-scanner"}}
 ---
 
-# X Skill Scanner v7.1
+# X Skill Scanner v7.1.1
 
 **纯 Skill 实现的 AI Agent 技能安全扫描器** — 标准化扫描流程 + 二次语义审计 + 自动安装触发
 
@@ -539,4 +554,4 @@ python3 scripts/scan_skill.sh --mode batch --platform openclaw
 
 ---
 
-*版本：v7.1.0 | 最后更新：2026-04-13*
+*版本：v7.1.1 | 最后更新：2026-04-13*

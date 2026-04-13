@@ -1,8 +1,8 @@
 # X-Skill-Scanner Version History
 
-## Current Version: v7.1.0 (2026-04-13)
+## Current Version: v7.1.1 (2026-04-13)
 
-### v7.1.0 - Platform Detection & AGENT.md Hook
+### v7.1.1 - Platform Detection & AGENT.md Hook
 
 **Release Date:** 2026-04-13
 
