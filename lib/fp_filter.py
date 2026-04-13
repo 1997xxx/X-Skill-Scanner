@@ -15,6 +15,7 @@ False Positive Pre-Filter v5.0 — 误报预过滤器
 5. 不确定的 → 交给 LLM 审查
 """
 
+import os
 import re
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -380,12 +381,25 @@ class FPFilter:
         # ── 步骤 0: 安全工具自引用检测（最高优先级）─────────────
         # 如果文件路径包含扫描器自身的 lib/rules/config/data 目录
         # 这几乎肯定是安全工具在定义规则，而非实际攻击代码
-        is_security_tool = any(part in file_path for part in [
-            'x-skill-scanner/lib/', '/lib/', 'lib/',
-            'x-skill-scanner/rules/', '/rules/', 'rules/',
-            'x-skill-scanner/config/', '/config/', 'config/',
-            'x-skill-scanner/data/', '/data/', 'data/',
-        ])
+        # v5.2.2: 精确匹配扫描器根目录，避免误报测试数据
+        # v5.2.3: 支持相对路径和绝对路径
+        # v5.2.4: 修复：只匹配扫描器自身的目录，不匹配测试数据目录
+        scanner_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        
+        # 将 file_path 转换为绝对路径进行比较
+        if not os.path.isabs(file_path):
+            # 如果是相对路径，尝试相对于当前工作目录解析
+            abs_file_path = os.path.abspath(file_path)
+        else:
+            abs_file_path = file_path
+        
+        # 只匹配扫描器自身的 lib/rules/config/data 目录，不匹配测试数据
+        is_security_tool = (
+            abs_file_path.startswith(scanner_root + '/lib/') or
+            abs_file_path.startswith(scanner_root + '/rules/') or
+            abs_file_path.startswith(scanner_root + '/config/') or
+            abs_file_path.startswith(scanner_root + '/data/')
+        )
         
         # v5.2.1: Also detect scanner's own documentation files at project root
         # These contain IOC examples and attack descriptions for documentation purposes
@@ -394,9 +408,12 @@ class FPFilter:
         is_own_doc = fname in doc_file_patterns
         
         # Detect if this looks like the scanner's own project directory
-        is_own_project = any(part in file_path for part in [
-            'x-skill-scanner', 'X-Skill-Scanner',
-        ])
+        # 精确匹配：只匹配扫描器根目录，不匹配测试数据目录
+        is_own_project = (
+            abs_file_path.startswith(scanner_root + '/') and
+            not '/tests/' in abs_file_path and
+            not '/test_data/' in abs_file_path
+        )
         
         # Also check if the scan target IS the scanner (relative paths from scanner root)
         is_scanning_self = is_own_doc and any(kw in description.lower() for kw in [
@@ -447,6 +464,78 @@ class FPFilter:
                     confidence=0.95,
                     reason='安全工具自引用（规则定义/检测逻辑/参考数据）',
                 )
+        
+        # ── 步骤 0.5: threat_intel 发现的真实威胁直接保留 ───────
+        # v5.2.4: 修复误报问题 - threat_intel 检测到的攻击模式是真实威胁，不是误报
+        # v5.2.5: 改进 - 区分真正的威胁和误报
+        # v5.2.6: 添加对 SkillJect 活动检测的处理
+        if source == 'threat_intel':
+            # 检查是否是 SkillJect 活动检测
+            if 'SkillJect 执行链检测' in title:
+                # 检查是否是测试脚本中的 eval 使用
+                # 如果文件路径包含 "test"、"scripts"、"eval" 等，则是误报
+                if any(kw in file_path.lower() for kw in ['test', 'scripts/']):
+                    # 检查是否是测试 eval 功能的脚本
+                    if 'run_eval' in file_path or 'run_loop' in file_path:
+                        return FilterResult(
+                            finding=finding,
+                            verdict='FP',
+                            confidence=0.90,
+                            reason='误报：测试脚本中的 eval 使用，不是真正的 SkillJect 攻击',
+                        )
+            
+            # 检查是否是真正的攻击模式匹配（不是扫描器自身的规则定义）
+            # 真正的攻击模式匹配会包含具体的模式 ID 和文件路径
+            if '模式 ID:' in description or 'pattern_id:' in description.lower():
+                # 检查是否包含具体的攻击模式类型
+                # 高危模式：直接标记为 TP
+                high_risk_patterns = [
+                    'reverse_shell', 'config_exfiltration', 'hidden_backdoor',
+                    'remote_script_download', 'base64_exec',
+                    'macos_staged_payload', 'nova_stealer_c2',
+                    'osascript_password_phishing', 'typosquatting',
+                ]
+                for pattern in high_risk_patterns:
+                    if pattern in description.lower():
+                        return FilterResult(
+                            finding=finding,
+                            verdict='TP',
+                            confidence=0.95,
+                            reason=f'threat_intel 检测到高危攻击模式: {pattern}',
+                        )
+                
+                # 中危模式：需要进一步检查
+                medium_risk_patterns = [
+                    'credential_harvesting', 'prompt_injection', 'social_engineering',
+                    'webhook_exfiltration', 'browser_data_theft',
+                ]
+                for pattern in medium_risk_patterns:
+                    if pattern in description.lower():
+                        # 对于 credential_harvesting，检查是否是真正的凭证窃取
+                        # 如果匹配的是 "token"（LLM token），则是误报
+                        if pattern == 'credential_harvesting':
+                            indicator = finding.get('indicator', '')
+                            # LLM token 相关的 "token" 是误报
+                            if 'token' in indicator.lower() and 'llm' not in description.lower():
+                                # 检查是否真的在窃取凭证
+                                if not any(kw in description.lower() for kw in [
+                                    'ssh', 'id_rsa', 'aws', 'credentials', 'password',
+                                    'secret', 'key', 'chrome', 'firefox', 'browser'
+                                ]):
+                                    return FilterResult(
+                                        finding=finding,
+                                        verdict='FP',
+                                        confidence=0.90,
+                                        reason='误报：匹配的是 LLM token，不是凭证窃取',
+                                    )
+                        
+                        # 标记为不确定，需要 LLM 审查
+                        return FilterResult(
+                            finding=finding,
+                            verdict='UNCERTAIN',
+                            confidence=0.5,
+                            reason=f'threat_intel 检测到中危攻击模式: {pattern}，需要人工审查',
+                        )
         
         # ── 步骤 1: 检查真实威胁指标 ──────────────────────────
         # 如果匹配真实威胁，直接标记 TP
